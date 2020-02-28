@@ -7,7 +7,6 @@ Created on Sun Feb 23 2020
 """
 
 from realestate.utility import UTILITY_INDEXES, UTILITY_FUNCTIONS
-from realestate.supplyside import Housing, Household
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -26,8 +25,6 @@ utility_indexes = {
     'quality' : UTILITY_INDEXES('quality')(amplitude=1, tolerances={})}
 
 utility_function = UTILITY_FUNCTIONS['housing'](utility_indexes, amplitude=1, subsistences={}, weights={}, diminishrate=1)
-
-housing = Household(utility_function)
 
 
 

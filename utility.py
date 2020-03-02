@@ -58,9 +58,9 @@ class Consumption_UtilityIndex:
 
 
 @UTILITY_INDEXES('community')
-@UtilityIndex.create('tangent', {'race':3, 'lifestage':2, 'education':1})
+@UtilityIndex.create('tangent', {})
 class Community_UtilityIndex: 
-    def execute(self, *args, community, race, lifestage, education, **kwargs): 
+    def execute(self, *args, community, **kwargs): 
         pass ### WORKING ###
 
 

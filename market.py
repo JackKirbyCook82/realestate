@@ -13,7 +13,7 @@ from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Rates', 'Durations', 'Economy', 'Loan', 'Financials', 'Housing', 'Household', 'InsufficientFundsError', 'InsufficientCoverageError', 'UnstableLifeStyleError']
+__all__ = ['Rates', 'Durations', 'Economy', 'Loan', 'Financials', 'Housing', 'Household']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -152,9 +152,9 @@ class Financials(ntuple('Financials', 'wealth income value mortgage studentloan 
         return consumption
         
 
-class Household(ntuple('Household', 'period race education children size')):
-    def __new__(cls, *args, age, race, education, children, size, **kwargs):
-        return super().__new__(cls, age, race, education, children, size)
+class Household(ntuple('Household', 'period')):
+    def __new__(cls, *args, period, **kwargs):
+        return super().__new__(cls, period)
         
     def __init__(self, wealth, horizon, *args, financials, utility, **kwargs):
         self.wealth, self.horizon = wealth, horizon

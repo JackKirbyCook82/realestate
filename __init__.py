@@ -38,7 +38,7 @@ studentloan = Loan(name='studentloan', balance=35000, rate=rates.studentloan, du
 debt = Loan(name='debt', balance=5000, rate=rates.debt, duration=durations.debt)
 
 financials = Financials(wealth=230000, income=130000, value=200000 + 265000, mortgage=mortgage, studentloan=studentloan, debt=debt)
-households = Household(230000, 3*12, financials=financials, utility=utility, period=10, race='White', education='Graduate', children=1, size=3)
+households = Household(230000, 3*12, financials=financials, utility=utility, period=12*12)
 
 attributes = {
     'crime' : Crime(),

@@ -9,7 +9,6 @@ Created on Sun Feb 23 2020
 from collections import namedtuple as ntuple
 
 from utilities.strings import uppercase
-from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -18,26 +17,25 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
+ADULTHOOD = 18
+RETIREMENT = 65
+DEATH = 95
+
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
 
 
 class Rates(ntuple('Rates', 'discount wealth value income mortgage studentloan debt')): 
-    @keydispatcher
-    @classmethod
-    def convertfrom(cls, basis, rate): raise KeyError(basis)
-    @convertfrom('monthly')
-    @classmethod
-    def convertfrom_monthly(cls, rate): return rate
-    @convertfrom('yearly')
-    @classmethod
-    def convertfrom_yearly(cls, rate): return pow(rate + 1, 1/12) - 1
-    
-    def __new__(cls, basis, *args, **kwargs): return super().__new__(cls, *[float(cls.convertfrom(basis, kwargs[rate])) for rate in cls._fields])
     def __repr__(self): return '{}(discount={}, wealth={}, value={}, income={}, mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
+    def __new__(cls, *args, basis, **kwargs): 
+        if basis == 'year': function = lambda rate: pow(rate + 1, 1/12) - 1
+        elif basis == 'month': function = lambda rate: rate
+        else: raise ValueError(basis)
+        return super().__new__(cls, *[float(function(rate)) for rate in cls._fields])
+    
     
     def theta(self, risk): return (self.wealth - self.discount) / risk    
     def income_integral(self, horizon): return (1 - pow(1 + self.income - self.wealth, horizon)) / (self.income - self.wealth)
-    def consumption_integal(self, horizon, *args, economy, **kwargs): return (1 - pow(1 + self.theta(economy.risk) - self.wealth, horizon)) / (self.theta(economy.risk) - self.wealth)
+    def consumption_integal(self, horizon, risk): return (1 - pow(1 + self.theta(risk) - self.wealth, horizon)) / (self.theta(risk) - self.wealth)
     
     def mortgage_integral(self, horizon): return self.loan_integral(self, 'mortgage', horizon) 
     def studentloan_integral(self, horizon): return self.loan_integral(self, 'studentloan', horizon) 
@@ -47,40 +45,23 @@ class Rates(ntuple('Rates', 'discount wealth value income mortgage studentloan d
     def __loanfactor(self, loan, horizon): return (getattr(self, loan) * pow(1 + getattr(self, loan), horizon)) / (pow(1 + getattr(self, loan), horizon) - 1)
 
 
-class Durations(ntuple('Duration', 'life income mortgage studentloan debt')):
-    @keydispatcher
-    @classmethod
-    def convertfrom(cls, basis, rate): raise KeyError(basis)
-    @convertfrom('monthly')
-    @classmethod
-    def convertfrom_monthly(cls, duration): return duration
-    @convertfrom('yearly')
-    @classmethod
-    def convertfrom_yearly(cls, duration): return duration * 12
-    
-    def __new__(cls, basis, *args, **kwargs): return super().__new__(cls, *[int(cls.convertfrom(basis, kwargs[rate])) for rate in cls._fields])
-    def __repr__(self): return '{}(life={}, income={}, mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
-    def __call__(self, key, *args, **kwargs): return self.execute(key, *args, **kwargs)
+class Durations(ntuple('Duration', 'mortgage studentloan debt')):
+    def __repr__(self): return '{}(mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
+    def __new__(cls, *args, basis, **kwargs): 
+        if basis == 'year': function = lambda rate: rate * 12
+        elif basis == 'month': function = lambda rate: rate
+        else: raise ValueError(basis)        
+        return super().__new__(cls, *[int(function(rate)) for rate in cls._fields])
+ 
 
-    @keydispatcher
-    def execute(self, key, *args, **kwargs): raise KeyError(key)
-    @execute('life')
-    def __life(self, period, horizon, *args, **kwargs): return min(period + horizon, self.life)
-    @execute('income')
-    def __income(self, period, horizon, *args, **kwargs): return min(period + horizon, self.income)
-    @execute('mortgage')
-    def __mortgage(self, period, horizon, duration, *args, **kwargs): return min(self.__life(period, horizon), duration)
-    @execute('studentloan')
-    def __studentloan(self, period, horizon, duration, *args, **kwargs): return min(self.__life(period, horizon), duration)
-    @execute('debt')
-    def __debt(self, period, horizon, duration, *args, **kwargs): return min(self.__life(period, horizon), duration)
-    
-
-class Economy(ntuple('Economy', 'rates risk price commisions financing coverage loantovalue')):
-    def __repr__(self): return '{}(rates={}, commisions={}, financing={}, coverage={}, loantovalue={})'.format(self.__class__.__name__, repr(self.rates), *self._fields[1:])
-    def __new__(cls, rates, commisions, financing, coverage, loantovalue):
+class Economy(ntuple('Economy', 'rates durations risk price commisions financing coverage loantovalue')):
+    def __repr__(self): 
+        fmt = '{}(rates={}, durations={}, price={}, commisions={}, financing={}, coverage={}, loantovalue={})' 
+        return fmt.format(self.__class__.__name__, repr(self.rates), repr(self.durations), *self._fields[1:])
+    def __new__(cls, rates, durations, *args):
         assert isinstance(rates, Rates)
-        return super().__new__(cls, rates, commisions, financing, coverage, loantovalue)
+        assert isinstance(rates, Durations)
+        return super().__new__(cls, rates, durations, *args)
 
 
 class Loan(ntuple('Loan', 'name balance rate duration')):
@@ -131,44 +112,58 @@ class Financials(ntuple('Financials', 'wealth income value mortgage studentloan 
     def __downpayment(self, value, loantovalue): return value * (1 - loantovalue)
     
     def sale(self, *args, economy, **kwargs): return self.__class__(self.wealth + self.__proceeds(economy.commisions), self.income, 0, None, self.studentloan, self.debt)
-    def buy(self, value, *args, economy, durations, **kwargs): 
+    def buy(self, value, *args, economy, **kwargs): 
         closingcost = self.__commisions(value, economy.commisions, economy.financing)
         downpayment = self.__downpayment(value, economy.loantovalue)
-        mortgage = Loan('mortgage', value - downpayment, economy.rates.mortgage, durations.mortgage)
+        mortgage = Loan('mortgage', value - downpayment, economy.rates.mortgage, economy.durations.mortgage)
         newfinancials = self.__class__(self.wealth - downpayment - closingcost, self.income, value, mortgage, self.studentloan, self.debt)
         if newfinancials.wealth < 0: raise InsufficientFundsError(newfinancials)  
         if newfinancials.coverage < economy.coverage: raise InsufficientCoverageError(newfinancials, economy.coverage)
         return newfinancials
           
-    def __call__(self, wealth, period, horizon, *args, economy, durations, **kwargs): 
-        w = self.wealth - (wealth / pow(1 + economy.rates.wealth, durations.life(period, horizon))) 
-        i = economy.rates.income_integral(durations('income', period, horizon))
-        c = economy.rates.consumption_integal(durations('life', period, horizon), economy=economy)
-        m = economy.rates.mortgage_integral(durations('mortgage', period, horizon, self.mortgage.duration))
-        s = economy.rates.studentloan_integral(durations('studentloan', period, horizon, self.studentloan.duration))
-        d = economy.rates.debt_integal(durations('debt', period, horizon, self.debt.duration))        
-        consumption = (w + (i * self.income) - (m * self.mortgage) - (s * self.studentloan) - (d * self.debt)) / c
+    def __call__(self, household, *args, economy, **kwargs): 
+        w = self.wealth - (household.wealth / pow(1 + economy.rates.wealth, household.horizon)) 
+        i = economy.rates.income_integral(min(household.horizon, household.retirement))
+        c = economy.rates.consumption_integal(household.horizon, economy.risk)
+        m = economy.rates.mortgage_integral(min(household.horizon, self.mortgage.duration))
+        s = economy.rates.studentloan_integral(min(household.horzion, self.studentloan.duration))
+        d = economy.rates.debt_integal(min(household.horizon, self.debt.duration))        
+        consumption = (w + (i * self.income) - (m * self.mortgage.balance) - (s * self.studentloan.balance) - (d * self.debt.balance)) / c
         if consumption < 0: raise UnstableLifeStyleError(consumption)
         return consumption
+       
         
+class PrematureHouseholderError(Exception):
+    def __init__(self, age): super().__init__('{} < {}'.format(age, ADULTHOOD))
+    
+class DeceasedHouseholderError(Exception):
+    def __init__(self, age): super().__init__('{} > {}'.format(age, DEATH))
+    
 
-class Household(ntuple('Household', 'period')):
-    def __new__(cls, *args, period, **kwargs):
-        return super().__new__(cls, period)
+class Household(ntuple('Household', 'currentage horizonage')):
+    @property
+    def period(self): return int((self.currentage * 12) - (ADULTHOOD * 12))
+    @property
+    def horizon(self): return int((self.horizonage * 12) - self.period)
+    @property
+    def retirement(self): return int((DEATH * 12) - self.period)
+    @property
+    def death(self): return int((RETIREMENT * 12) - self.period)
+    
+    def __new__(cls, *args, currentage, horizonage, **kwargs):  
+        if currentage < ADULTHOOD: raise PrematureHouseholderError(currentage)
+        if currentage > ADULTHOOD: raise DeceasedHouseholderError(currentage)                
+        return super().__new__(cls, currentage, min(horizonage, DEATH))
         
-    def __init__(self, wealth, horizon, *args, financials, utility, **kwargs):
-        self.wealth, self.horizon = wealth, horizon
+    def __init__(self, wealth, *args, financials, utility, **kwargs):
+        self.wealth = wealth
         self.financials, self.utility = financials, utility
            
-    def __call__(self, tenure, housing, *args, economy, durations, **kwargs):
-        if tenure == 'renter': 
-            financials = self.financials.sale(*args, **kwargs)
-            cost = housing.rentercost
-        elif tenure == 'owner': 
-            financials = self.financials.buy(housing.price, *args, **kwargs)
-            cost = housing.ownercost
+    def __call__(self, tenure, housing, *args, economy, **kwargs):
+        if tenure == 'renter': financials, cost = self.financials.sale(*args, **kwargs), housing.rentercost
+        elif tenure == 'owner': financials, cost = self.financials.buy(housing.price, *args, **kwargs), housing.ownercost
         else: raise ValueError(tenure)
-        total_consumption = self.financials(self.wealth, self.period, self.horizon, *args, econcomy=economy, durations=durations, **kwargs)
+        total_consumption = self.financials(self, *args, economy=economy, **kwargs)
         housing_consumption = financials + cost        
         economic_consumption = total_consumption - housing_consumption
         return self.utility(consumption=economic_consumption / economy.price, **housing.todict())
@@ -178,8 +173,7 @@ class Housing(ntuple('Housing', 'unit crime school space community proximity qua
     def todict(self): return self._asdict()
     
     def __new__(cls, *args, unit, crime, school, space, community, proximity, quality, **kwargs): 
-        return super().__new__(cls, unit, crime, school, space, community, proximity, quality)   
-    
+        return super().__new__(cls, unit, crime, school, space, community, proximity, quality)     
     def __init__(self, *args, cost, rent, price, **kwargs): 
         self.price, self.cost, self.rent = price, cost, rent
 

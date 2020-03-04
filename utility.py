@@ -16,6 +16,14 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
+CONSUMPTION = {'consumption':1}
+CRIMES = {'shooting':3, 'arson':3, 'burglary':3, 'assault':2, 'vandalism':2, 'robbery':2, 'arrest':1, 'other':1, 'theft':1}
+SCHOOLS = {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'stratio':1, 'exp':1}
+SPACE =  {'sqft':2, 'bedrooms':1}
+QUALITY = {'age':1}
+PROXIMITY = {'commute':1}
+COMMUNITY = {}
+
 UTILITY_INDEXES = registry()
 UTILITY_FUNCTIONS = {'housing': UtilityFunction.create('cobbdouglas')}
 
@@ -27,8 +35,15 @@ _percent = lambda x, xmin, xmax: float((xmin+min(x, xmax))/(xmin+xmax))
 _antipercent = lambda x: 100 - x
 
 
+@UTILITY_INDEXES('consumption')
+@UtilityIndex.create('logarithm', CONSUMPTION)
+class Consumption_UtilityIndex: 
+    def execute(self, *args, consumption, **kwargs): 
+        return {'consumption':consumption}
+
+
 @UTILITY_INDEXES('crime')
-@UtilityIndex.create('inverted', {'shooting':3, 'arson':3, 'burglary':3, 'assault':2, 'vandalism':2, 'robbery':2, 'arrest':1, 'other':1, 'theft':1})
+@UtilityIndex.create('inverted', CRIMES)
 class Crime_UtilityIndex: 
     def execute(self, *args, crime, **kwargs): 
        return {'shooting':crime.shooting, 'arson':crime.arson, 'burglary':crime.burglary, 'assault':crime.assault,'vandalism':crime.vandalism, 
@@ -36,7 +51,7 @@ class Crime_UtilityIndex:
 
 
 @UTILITY_INDEXES('school')
-@UtilityIndex.create('tangent', {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'stratio':1, 'exp':1})
+@UtilityIndex.create('tangent', SCHOOLS)
 class School_UtilityIndex: 
     def execute(self, *args, school, **kwargs): 
         return {'gradulation':school.graduation_rate, 'reading':school.reading_rate, 'math':school.math_rate, 
@@ -45,38 +60,37 @@ class School_UtilityIndex:
 
 
 @UTILITY_INDEXES('space')
-@UtilityIndex.create('logarithm', {'sqft':3, 'bedrooms':2, 'rooms':1})
+@UtilityIndex.create('logarithm', SPACE)
 class Space_UtilityIndex: 
     def execute(self, *args, space, **kwargs): 
-        return {'sqft':space.sqft, 'bedrooms':space.bedrooms, 'rooms':space.rooms}
+        return {'sqft':space.sqft, 'bedrooms':space.bedrooms}
 
 
-@UTILITY_INDEXES('consumption')
-@UtilityIndex.create('logarithm', {'consumption':1})
-class Consumption_UtilityIndex: 
-    def execute(self, *args, consumption, **kwargs): 
-        return {'consumption':consumption}
+@UTILITY_INDEXES('quality')
+@UtilityIndex.create('inverted', QUALITY)
+class Quality_UtilityIndex: 
+    def execute(self, *args, date, quality, **kwargs): 
+        return {'age':date.year - quality.yearbuilt + 1}
+    
+
+@UTILITY_INDEXES('proximity')
+@UtilityIndex.create('inverted', PROXIMITY)
+class Proximity_UtilityIndex: 
+    def execute(self, *args, proximity, **kwargs): 
+        return {'commute':proximity.commute.total('minutes')}
 
 
 @UTILITY_INDEXES('community')
-@UtilityIndex.create('tangent', {})
+@UtilityIndex.create('tangent', COMMUNITY)
 class Community_UtilityIndex: 
     def execute(self, *args, community, **kwargs): 
         pass 
 
 
-@UTILITY_INDEXES('proximity')
-@UtilityIndex.create('inverted', {})
-class Proximity_UtilityIndex: 
-    def execute(self, *args, proximity, **kwargs): 
-        pass 
 
 
-@UTILITY_INDEXES('quality')
-@UtilityIndex.create('logarithm', {})
-class Quality_UtilityIndex: 
-    def execute(self, *args, quality, **kwargs): 
-        pass
+
+
 
 
 

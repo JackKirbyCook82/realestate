@@ -166,7 +166,7 @@ class Household(ntuple('Household', 'currentage horizonage')):
         total_consumption = self.financials(self, *args, economy=economy, **kwargs)
         housing_consumption = financials + cost        
         economic_consumption = total_consumption - housing_consumption
-        return self.utility(consumption=economic_consumption / economy.price, **housing.todict())
+        return self.utility(*args, consumption=economic_consumption / economy.price, **housing.todict(), **kwargs)
 
 
 class Housing(ntuple('Housing', 'unit crime school space community proximity quality')):  

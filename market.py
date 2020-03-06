@@ -17,7 +17,7 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-ADULTHOOD = 18
+ADULTHOOD = 15
 RETIREMENT = 65
 DEATH = 95
 
@@ -26,7 +26,7 @@ _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else lis
 
 class Rates(ntuple('Rates', 'discount wealth value income mortgage studentloan debt')): 
     def __repr__(self): return '{}(discount={}, wealth={}, value={}, income={}, mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
-    def __new__(cls, *args, basis, **kwargs): 
+    def __new__(cls, basis, *args, **kwargs): 
         if basis == 'year': function = lambda rate: pow(rate + 1, 1/12) - 1
         elif basis == 'month': function = lambda rate: rate
         else: raise ValueError(basis)
@@ -47,7 +47,7 @@ class Rates(ntuple('Rates', 'discount wealth value income mortgage studentloan d
 
 class Durations(ntuple('Duration', 'mortgage studentloan debt')):
     def __repr__(self): return '{}(mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
-    def __new__(cls, *args, basis, **kwargs): 
+    def __new__(cls, basis, *args, **kwargs): 
         if basis == 'year': function = lambda rate: rate * 12
         elif basis == 'month': function = lambda rate: rate
         else: raise ValueError(basis)        
@@ -58,10 +58,10 @@ class Economy(ntuple('Economy', 'rates durations risk price commisions financing
     def __repr__(self): 
         fmt = '{}(rates={}, durations={}, price={}, commisions={}, financing={}, coverage={}, loantovalue={})' 
         return fmt.format(self.__class__.__name__, repr(self.rates), repr(self.durations), *self._fields[1:])
-    def __new__(cls, rates, durations, *args):
+    def __new__(cls, *args, rates, durations, **kwargs):
         assert isinstance(rates, Rates)
         assert isinstance(rates, Durations)
-        return super().__new__(cls, rates, durations, *args)
+        return super().__new__(cls, rates, durations, *[field for field in cls._fields])
 
 
 class Loan(ntuple('Loan', 'name balance rate duration')):
@@ -99,7 +99,7 @@ class Financials(ntuple('Financials', 'wealth income value mortgage studentloan 
     @property
     def loantovalue(self): return self.mortgage / self.value
 
-    def __new__(cls, wealth, income, value, mortgage, studentloan, debt):        
+    def __new__(cls, *args, wealth, income, value, mortgage, studentloan, debt, **kwargs):        
         if mortgage is None: mortgage = Loan('mortgage', 0, 0, 0) 
         if studentloan is None: studentloan = Loan('studentloan', 0, 0, 0)
         if debt is None: debt = Loan('debt', 0, 0, 0)
@@ -121,13 +121,13 @@ class Financials(ntuple('Financials', 'wealth income value mortgage studentloan 
         if newfinancials.coverage < economy.coverage: raise InsufficientCoverageError(newfinancials, economy.coverage)
         return newfinancials
           
-    def __call__(self, household, *args, economy, **kwargs): 
-        w = self.wealth - (household.wealth / pow(1 + economy.rates.wealth, household.horizon)) 
-        i = economy.rates.income_integral(min(household.horizon, household.retirement))
-        c = economy.rates.consumption_integal(household.horizon, economy.risk)
-        m = economy.rates.mortgage_integral(min(household.horizon, self.mortgage.duration))
-        s = economy.rates.studentloan_integral(min(household.horzion, self.studentloan.duration))
-        d = economy.rates.debt_integal(min(household.horizon, self.debt.duration))        
+    def __call__(self, wealth, horizon, retirement, *args, economy, **kwargs): 
+        w = self.wealth - (wealth / pow(1 + economy.rates.wealth, horizon)) 
+        i = economy.rates.income_integral(min(horizon, retirement))
+        c = economy.rates.consumption_integal(horizon, economy.risk)
+        m = economy.rates.mortgage_integral(min(horizon, self.mortgage.duration))
+        s = economy.rates.studentloan_integral(min(horizon, self.studentloan.duration))
+        d = economy.rates.debt_integal(min(horizon, self.debt.duration))        
         consumption = (w + (i * self.income) - (m * self.mortgage.balance) - (s * self.studentloan.balance) - (d * self.debt.balance)) / c
         if consumption < 0: raise UnstableLifeStyleError(consumption)
         return consumption
@@ -140,7 +140,7 @@ class DeceasedHouseholderError(Exception):
     def __init__(self, age): super().__init__('{} > {}'.format(age, DEATH))
     
 
-class Household(ntuple('Household', 'currentage horizonage')):
+class Household(ntuple('Household', 'age race origin language english education children size')):
     @property
     def period(self): return int((self.currentage * 12) - (ADULTHOOD * 12))
     @property
@@ -150,30 +150,31 @@ class Household(ntuple('Household', 'currentage horizonage')):
     @property
     def death(self): return int((RETIREMENT * 12) - self.period)
     
-    def __new__(cls, *args, currentage, horizonage, **kwargs):  
-        if currentage < ADULTHOOD: raise PrematureHouseholderError(currentage)
-        if currentage > ADULTHOOD: raise DeceasedHouseholderError(currentage)                
-        return super().__new__(cls, currentage, min(horizonage, DEATH))
+    def __new__(cls, *args, age, **kwargs):  
+        if age < ADULTHOOD: raise PrematureHouseholderError(age)
+        if age > ADULTHOOD: raise DeceasedHouseholderError(age)                
+        return super().__new__(cls, age, *[field for field in cls._fields])
         
-    def __init__(self, wealth, *args, financials, utility, **kwargs):
-        self.wealth = wealth
+    def __init__(self, wealth, age, *args, financials, utility, **kwargs):
+        self.horizonage = min(age, DEATH)
+        self.horizonwealth = wealth
         self.financials, self.utility = financials, utility
            
     def __call__(self, tenure, housing, *args, economy, **kwargs):
         if tenure == 'renter': financials, cost = self.financials.sale(*args, **kwargs), housing.rentercost
         elif tenure == 'owner': financials, cost = self.financials.buy(housing.price, *args, **kwargs), housing.ownercost
         else: raise ValueError(tenure)
-        total_consumption = self.financials(self, *args, economy=economy, **kwargs)
+        total_consumption = self.financials(self.horizonwealth, self.horizon, self.retirement, *args, economy=economy, **kwargs)
         housing_consumption = financials + cost        
         economic_consumption = total_consumption - housing_consumption
-        return self.utility(*args, consumption=economic_consumption / economy.price, **housing.todict(), **kwargs)
+        return self.utility(*args, consumption=economic_consumption / economy.price, **housing.todict(), **self.todict(), **kwargs)
 
 
-class Housing(ntuple('Housing', 'unit crime school space community proximity quality')):  
+class Housing(ntuple('Housing', 'unit crimes schools space community proximity quality')):  
     def todict(self): return self._asdict()
     
-    def __new__(cls, *args, unit, crime, school, space, community, proximity, quality, **kwargs): 
-        return super().__new__(cls, unit, crime, school, space, community, proximity, quality)     
+    def __new__(cls, *args, unit, crimes, schools, space, community, proximity, quality, **kwargs): 
+        return super().__new__(cls, unit, crimes, schools, space, community, proximity, quality)     
     def __init__(self, *args, cost, rent, price, **kwargs): 
         self.price, self.cost, self.rent = price, cost, rent
 

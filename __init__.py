@@ -38,18 +38,23 @@ studentloan = Loan(name='studentloan', balance=35000, rate=rates.studentloan, du
 debt = Loan(name='debt', balance=5000, rate=rates.debt, duration=durations.debt)
 
 financials = Financials(wealth=230000, income=130000, value=200000 + 265000, mortgage=mortgage, studentloan=studentloan, debt=debt)
-households = Household(250000, financials=financials, utility=utility, currentage=37, horizonage=42)
+household = Household(250000, 42, financials=financials, utility=utility, age=37, race='White', education='Graduate', origin='NonHispanic', language='English', english='Fluent', children=True, size=4)
 
 attributes = {
-    'crime' : Crime(shooting=0, arson=0, burglary=0, assault=0, vandalism=0, robbery=0, arrest=5, other=3, theft=10),
-    'school' : School(graduation_rate=0.95, reading_rate=0.85, math_rate=0.65, ap_enrollment=0.25, avgsat_score=1225, avgact_score=25, student_density=30, inexperience_ratio=0.1),
-    'space' : Space(sqft=1500, bedrooms=3),
+    'crime' : {
+        'spotcrime':Crime(shooting=0, arson=0, burglary=0, assault=0, vandalism=0, robbery=0, arrest=4, other=3, theft=8),
+        'mylocalcrime':Crime(shooting=0, arson=0, burglary=0, assault=0, vandalism=0, robbery=0, arrest=8, other=6, theft=12)},
+    'school' : {
+        'elementry':School(reading_rate=0.8, math_rate=0.7, student_density=30, inexperience_ratio=0.2),
+        'middle':School(reading_rate=0.75, math_rate=0.75, student_density=30, inexperience_ratio=0.15),
+        'high':School(graduation_rate=0.95, reading_rate=0.85, math_rate=0.65, ap_enrollment=0.25, avgsat_score=1225, avgact_score=25, student_density=30, inexperience_ratio=0.1)},
+    'space' : Space(sqft=1500, bedrooms=3, rooms=6),
     'quality' : Quality(yearbuilt=2000), 
-    'proximity' : Proximity(commute=45),  
+    'proximity' : Proximity(),  
     'community' : Community()}
 
 housing = Housing(cost=1750, rent=3000, price=400000, unit='House', **attributes)
-utility = households('owner', housing, economy=economy, date=Date(year=2020))
+utility = household('owner', housing, economy=economy, date=Date(year=2020))
 
 
 

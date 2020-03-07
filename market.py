@@ -199,8 +199,8 @@ class Housing(ntuple('Housing', 'unit crimes schools space community proximity q
     def __getitem__(self, key): self.todict()[key]
     def todict(self): return self._asdict()
     
-    def __new__(cls, *args, unit, crimes, schools, space, community, proximity, quality, **kwargs): 
-        return super().__new__(cls, unit, crimes, schools, space, community, proximity, quality)     
+    def __new__(cls, *args, **kwargs): 
+        return super().__new__(cls, *[field for field in cls._fields])     
     def __init__(self, *args, cost, rent, price, **kwargs): 
         self.price, self.cost, self.rent = price, cost, rent
 

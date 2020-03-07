@@ -18,6 +18,11 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
+MINSAT, MAXSAT = 400, 1600
+MINACT, MAXACT = 1, 36
+MINST, MAXST = 1, 100
+MINCOMMUTE, MAXCOMMUTE = 0, 120
+
 CONSUMPTION = {'consumption':1}
 CRIMES = {'shooting':3, 'arson':3, 'burglary':3, 'assault':2, 'vandalism':2, 'robbery':2, 'arrest':1, 'other':1, 'theft':1}
 SCHOOLS = {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'stratio':1, 'exp':1}
@@ -28,11 +33,6 @@ COMMUNITY = {'race', 'origin', 'language', 'children'}
 
 UTILITY_INDEXES = registry()
 UTILITY_FUNCTIONS = {'housing': UtilityFunction.create('cobbdouglas')}
-
-MINSAT, MAXSAT = 400, 1600
-MINACT, MAXACT = 1, 36
-MINST, MAXST = 1, 100
-MINCOMMUTE, MAXCOMMUTE = 0, 120
 
 _flatten = lambda nesteditems: [item for items in nesteditems for item in items]
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
@@ -100,25 +100,10 @@ class Proximity_UtilityIndex:
 @UtilityIndex.create('tangent', COMMUNITY)
 class Community_UtilityIndex: 
     def execute(self, household, *args, community, **kwargs): 
-        samefunction = lambda attr: community[attr][household[attr]]/community[attr].total()
-        
-        #educationindex = community.education.categoryvector.index(household.education)
-        #englishindex = community.english.categoryvector.index(household.english)
-        #ageindex = community.age.categoryvector.index(household.age)
-        
-        # household.household_lifetime = [ADULTHOOD, DEATH]
-        # household.population_lifetime = [0, DEATH]
-        # household.household_incometime = [ADULTHOOD, RETIREMENT]
-        
-        # household.education = 'Bachelors'
-        # household.english = 'Well'
-        # hosuehold.age = 40
-        
-        # education, = ['Uneducated', 'GradeSchool', 'Associates', 'Bachelors', 'Graduate'] = [0, 1, 2, 3, 4]
-        # english = ['Fluent', 'Well', 'Poor', 'Inable'] = [0, 1, 2, 3]
-        # age = '{} YRS|range|15-55/10&60&65-85/10|cut=lower&shift=upper' 
-
-        return {'race':samefunction('race'), 'origin':samefunction('origin'), 'language':samefunction('language'), 'children':samefunction('children')}
+        category_percent = lambda attr: community[attr][household[attr]]/community[attr].total()     
+        category_variable = lambda attr: community[attr].xdev(str(household[attr]))
+        return {'race':category_percent('race'), 'origin':category_percent('origin'), 'language':category_percent('language'), 'children':category_percent('children'),
+                'age':community.age.xdev(household.age, bounds=household.household_lifetime), 'education':category_variable('education'), 'english':category_variable('english')}
 
 
 

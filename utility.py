@@ -23,8 +23,8 @@ CRIMES = {'shooting':3, 'arson':3, 'burglary':3, 'assault':2, 'vandalism':2, 'ro
 SCHOOLS = {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'stratio':1, 'exp':1}
 QUALITY = {'age':1}
 SPACE =  {'bed/ppl':3, 'sqft/ppl':2, 'sqft':1, 'sqft/bedroom':3}
-PROXIMITY = {}
-COMMUNITY = {}
+PROXIMITY = {'avgcommute':1, 'midcommute':1, 'stdcommute':1}
+COMMUNITY = {'race', 'origin', 'language', 'children'}
 
 UTILITY_INDEXES = registry()
 UTILITY_FUNCTIONS = {'housing': UtilityFunction.create('cobbdouglas')}
@@ -32,6 +32,7 @@ UTILITY_FUNCTIONS = {'housing': UtilityFunction.create('cobbdouglas')}
 MINSAT, MAXSAT = 400, 1600
 MINACT, MAXACT = 1, 36
 MINST, MAXST = 1, 100
+MINCOMMUTE, MAXCOMMUTE = 0, 120
 
 _flatten = lambda nesteditems: [item for items in nesteditems for item in items]
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
@@ -49,14 +50,14 @@ def average_records_generator(*records):
 @UTILITY_INDEXES('consumption')
 @UtilityIndex.create('logarithm', CONSUMPTION)
 class Consumption_UtilityIndex: 
-    def execute(self, *args, consumption, **kwargs): 
+    def execute(self, household, *args, consumption, **kwargs): 
         return {'consumption':consumption}
 
 
 @UTILITY_INDEXES('crime')
 @UtilityIndex.create('inverted', CRIMES)
 class Crime_UtilityIndex: 
-    def execute(self, *args, crimes, **kwargs):
+    def execute(self, household, *args, crimes, **kwargs):
         crime = {key:value for key, value in average_records_generator(*crimes.values())}
         return {'shooting':crime.shooting, 'arson':crime.arson, 'burglary':crime.burglary, 'assault':crime.assault,'vandalism':crime.vandalism, 
                 'robbery':crime.robbery, 'arrest':crime.arrest, 'other':crime.other, 'theft':crime.theft}
@@ -65,7 +66,7 @@ class Crime_UtilityIndex:
 @UTILITY_INDEXES('school')
 @UtilityIndex.create('tangent', SCHOOLS)
 class School_UtilityIndex: 
-    def execute(self, *args, schools, **kwargs): 
+    def execute(self, household, *args, schools, **kwargs): 
         school = {key:value for key, value in average_records_generator(*schools.values())}
         return {'gradulation':school.graduation_rate, 'reading':school.reading_rate, 'math':school.math_rate, 
                 'ap':school.ap_enrollment, 'st':_percent(school.student_density, MINST, MAXST), 'exp':_antipercent(school.inexperience_ratio),
@@ -75,36 +76,49 @@ class School_UtilityIndex:
 @UTILITY_INDEXES('quality')
 @UtilityIndex.create('inverted', QUALITY)
 class Quality_UtilityIndex: 
-    def execute(self, *args, date, quality, **kwargs): 
+    def execute(self, household, *args, quality, date, **kwargs): 
         return {'age':date.year - quality.yearbuilt + 1}
 
 
 @UTILITY_INDEXES('space')
 @UtilityIndex.create('logarithm', SPACE)
 class Space_UtilityIndex: 
-    def execute(self, *args, space, size, **kwargs): 
-        return {'bed/ppl':max(space.bedrooms/size, 1), 'sqft/ppl':space.sqft/size, 'sqft':space.sqft,
+    def execute(self, household, *args, space, **kwargs): 
+        return {'bed/ppl':max(space.bedrooms/household.size, 1), 'sqft/ppl':space.sqft/household.size, 'sqft':space.sqft,
                 'sqft/bedroom':space.sqft * (1-(space.bedrooms/space.rooms)) / space.bedrooms}
 
 
 @UTILITY_INDEXES('proximity')
 @UtilityIndex.create('inverted', PROXIMITY)
 class Proximity_UtilityIndex: 
-    def execute(self, *args, proximity, **kwargs): 
-        ### WORKING ###
-        return {}
+    def execute(self, household, *args, proximity, **kwargs): 
+        return {'avgcommute':proximity.commute.mean(bounds=[MINCOMMUTE, MAXCOMMUTE]), 'midcommute':proximity.commute.median(bounds=[MINCOMMUTE, MAXCOMMUTE]), 
+                'stdcommute':proximity.commute.mean(bounds=[MINCOMMUTE, MAXCOMMUTE]) + proximity.commute.std(bounds=[MINCOMMUTE, MAXCOMMUTE])}
 
 
 @UTILITY_INDEXES('community')
 @UtilityIndex.create('tangent', COMMUNITY)
 class Community_UtilityIndex: 
-    def execute(self, *args, community, **kwargs): 
-        ### WORKING ###
-        return {} 
+    def execute(self, household, *args, community, **kwargs): 
+        samefunction = lambda attr: community[attr][household[attr]]/community[attr].total()
+        
+        #educationindex = community.education.categoryvector.index(household.education)
+        #englishindex = community.english.categoryvector.index(household.english)
+        #ageindex = community.age.categoryvector.index(household.age)
+        
+        # household.household_lifetime = [ADULTHOOD, DEATH]
+        # household.population_lifetime = [0, DEATH]
+        # household.household_incometime = [ADULTHOOD, RETIREMENT]
+        
+        # household.education = 'Bachelors'
+        # household.english = 'Well'
+        # hosuehold.age = 40
+        
+        # education, = ['Uneducated', 'GradeSchool', 'Associates', 'Bachelors', 'Graduate'] = [0, 1, 2, 3, 4]
+        # english = ['Fluent', 'Well', 'Poor', 'Inable'] = [0, 1, 2, 3]
+        # age = '{} YRS|range|15-55/10&60&65-85/10|cut=lower&shift=upper' 
 
-
-
-
+        return {'race':samefunction('race'), 'origin':samefunction('origin'), 'language':samefunction('language'), 'children':samefunction('children')}
 
 
 

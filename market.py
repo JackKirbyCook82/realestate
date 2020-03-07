@@ -25,6 +25,9 @@ _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else lis
 
 
 class Rates(ntuple('Rates', 'discount wealth value income mortgage studentloan debt')): 
+    def __getitem__(self, key): self.todict()[key]
+    def todict(self): return self._asdict()    
+    
     def __repr__(self): return '{}(discount={}, wealth={}, value={}, income={}, mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
     def __new__(cls, basis, *args, **kwargs): 
         if basis == 'year': function = lambda rate: pow(rate + 1, 1/12) - 1
@@ -46,6 +49,9 @@ class Rates(ntuple('Rates', 'discount wealth value income mortgage studentloan d
 
 
 class Durations(ntuple('Duration', 'mortgage studentloan debt')):
+    def __getitem__(self, key): self.todict()[key]
+    def todict(self): return self._asdict()    
+    
     def __repr__(self): return '{}(mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
     def __new__(cls, basis, *args, **kwargs): 
         if basis == 'year': function = lambda rate: rate * 12
@@ -55,6 +61,9 @@ class Durations(ntuple('Duration', 'mortgage studentloan debt')):
  
 
 class Economy(ntuple('Economy', 'rates durations risk price commisions financing coverage loantovalue')):
+    def __getitem__(self, key): self.todict()[key]
+    def todict(self): return self._asdict()    
+    
     def __repr__(self): 
         fmt = '{}(rates={}, durations={}, price={}, commisions={}, financing={}, coverage={}, loantovalue={})' 
         return fmt.format(self.__class__.__name__, repr(self.rates), repr(self.durations), *self._fields[1:])
@@ -65,6 +74,9 @@ class Economy(ntuple('Economy', 'rates durations risk price commisions financing
 
 
 class Loan(ntuple('Loan', 'name balance rate duration')):
+    def __getitem__(self, key): self.todict()[key]
+    def todict(self): return self._asdict()    
+
     def __repr__(self): return '{}(name={}, balance={}, rate={}, duration={})'.format(self.__class__.__name__, *self._fields)
     def __str__(self): return '{name} | ${balance} for {duration} PERS @ {rate} %/PER'.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict()})
 
@@ -94,6 +106,9 @@ class UnstableLifeStyleError(Exception):
 
 
 class Financials(ntuple('Financials', 'wealth income value mortgage studentloan debt')):
+    def __getitem__(self, key): self.todict()[key]
+    def todict(self): return self._asdict()
+    
     @property
     def coverage(self): return self.income / (self.mortgage.payment + self.studentloan.payment + self.debt.payment)
     @property
@@ -121,13 +136,13 @@ class Financials(ntuple('Financials', 'wealth income value mortgage studentloan 
         if newfinancials.coverage < economy.coverage: raise InsufficientCoverageError(newfinancials, economy.coverage)
         return newfinancials
           
-    def __call__(self, wealth, horizon, retirement, *args, economy, **kwargs): 
-        w = self.wealth - (wealth / pow(1 + economy.rates.wealth, horizon)) 
-        i = economy.rates.income_integral(min(horizon, retirement))
-        c = economy.rates.consumption_integal(horizon, economy.risk)
-        m = economy.rates.mortgage_integral(min(horizon, self.mortgage.duration))
-        s = economy.rates.studentloan_integral(min(horizon, self.studentloan.duration))
-        d = economy.rates.debt_integal(min(horizon, self.debt.duration))        
+    def __call__(self, household, *args, economy, **kwargs): 
+        w = self.wealth - (household.horizonwealth / pow(1 + economy.rates.wealth, household.horizon)) 
+        i = economy.rates.income_integral(min(household.horizon, household.retirement))
+        c = economy.rates.consumption_integal(household.horizon, economy.risk)
+        m = economy.rates.mortgage_integral(min(household.horizon, self.mortgage.duration))
+        s = economy.rates.studentloan_integral(min(household.horizon, self.studentloan.duration))
+        d = economy.rates.debt_integal(min(household.horizon, self.debt.duration))        
         consumption = (w + (i * self.income) - (m * self.mortgage.balance) - (s * self.studentloan.balance) - (d * self.debt.balance)) / c
         if consumption < 0: raise UnstableLifeStyleError(consumption)
         return consumption
@@ -141,6 +156,9 @@ class DeceasedHouseholderError(Exception):
     
 
 class Household(ntuple('Household', 'age race origin language english education children size')):
+    def __getitem__(self, key): self.todict()[key]
+    def todict(self): return self._asdict()
+    
     @property
     def period(self): return int((self.currentage * 12) - (ADULTHOOD * 12))
     @property
@@ -149,6 +167,13 @@ class Household(ntuple('Household', 'age race origin language english education 
     def retirement(self): return int((DEATH * 12) - self.period)
     @property
     def death(self): return int((RETIREMENT * 12) - self.period)
+ 
+    @property
+    def household_lifetime(self): return [ADULTHOOD, DEATH]
+    @property
+    def population_lifetime(self): return [0, DEATH]
+    @property
+    def household_incometime(self): return [ADULTHOOD, RETIREMENT]
     
     def __new__(cls, *args, age, **kwargs):  
         if age < ADULTHOOD: raise PrematureHouseholderError(age)
@@ -164,13 +189,14 @@ class Household(ntuple('Household', 'age race origin language english education 
         if tenure == 'renter': financials, cost = self.financials.sale(*args, **kwargs), housing.rentercost
         elif tenure == 'owner': financials, cost = self.financials.buy(housing.price, *args, **kwargs), housing.ownercost
         else: raise ValueError(tenure)
-        total_consumption = self.financials(self.horizonwealth, self.horizon, self.retirement, *args, economy=economy, **kwargs)
+        total_consumption = self.financials(self, *args, economy=economy, **kwargs)
         housing_consumption = financials + cost        
         economic_consumption = total_consumption - housing_consumption
-        return self.utility(*args, consumption=economic_consumption / economy.price, **housing.todict(), **self.todict(), **kwargs)
+        return self.utility(self, *args, consumption=economic_consumption / economy.price, **housing.todict(), **kwargs)
 
 
 class Housing(ntuple('Housing', 'unit crimes schools space community proximity quality')):  
+    def __getitem__(self, key): self.todict()[key]
     def todict(self): return self._asdict()
     
     def __new__(cls, *args, unit, crimes, schools, space, community, proximity, quality, **kwargs): 

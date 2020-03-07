@@ -7,6 +7,7 @@ Created on Sun Feb 23 2020
 """
 
 from variables import Crime, School, Space, Community, Proximity, Quality, Date
+from variables.fields import RaceHistogram, OriginHistogram, EducationHistogram, LanguageHistogram, EnglishHistogram, ChildrenHistogram, AgeHistogram, CommuteHistogram
 
 from realestate.utility import UTILITY_INDEXES, UTILITY_FUNCTIONS
 from realestate.market import Rates, Durations, Economy, Loan, Financials, Housing, Household
@@ -38,7 +39,25 @@ studentloan = Loan(name='studentloan', balance=35000, rate=rates.studentloan, du
 debt = Loan(name='debt', balance=5000, rate=rates.debt, duration=durations.debt)
 
 financials = Financials(wealth=230000, income=130000, value=200000 + 265000, mortgage=mortgage, studentloan=studentloan, debt=debt)
-household = Household(250000, 42, financials=financials, utility=utility, age=37, race='White', education='Graduate', origin='NonHispanic', language='English', english='Fluent', children=True, size=4)
+household = Household(250000, 42, financials=financials, utility=utility, age=37, race='White', education='Graduate', origin='NonHispanic', language='English', english='Fluent', children='W/Children', size=4)
+
+race = {'White', 'Black', 'Native', 'Asian', 'Islander', 'Other', 'Mix'}
+origin = {'NonHispanic', 'Hispanic'}
+education = {'Uneducated', 'GradeSchool', 'Associates', 'Bachelors', 'Graduate'}
+language = {'English', 'Spanish', 'IndoEuro', 'Asian', 'Pacific', 'African', 'Native', 'Arabic', 'Other'}
+english = {'Fluent', 'Well', 'Poor', 'Inable'}
+children = {'W/OChildren', 'WChildren'}
+age = {'15 YRS|24 YRS', '25 YRS|34 YRS', '35 YRS|44 YRS', '45 YRS|54 YRS', '55 YRS|59 YRS', '60 YRS|64 YRS', '65 YRS|74 YRS', '75 YRS|84 YRS', '>85 YRS'}
+commute = {'<4 MINS', '5 MINS|9 MINS', '10 MINS|14 MINS', '15 MINS|19 MINS', '20 MINS|24 MINS', '25 MINS|29 MINS', '30 MINS|34 MINS', '35 MINS|39 MINS', '40 MINS|44 MINS', '45 MINS|59 MINS', '60 MINS|89 MINS', '>90 MINS'}
+
+racehistogram = RaceHistogram(race)
+originhistogram = OriginHistogram(origin)
+educationhistogram = EducationHistogram(education)
+languagehistogram = LanguageHistogram(language)
+englishhistogram = EnglishHistogram(english)
+childrenhistogram = ChildrenHistogram(children)
+agehistogram = AgeHistogram(age)
+commutehistogram = CommuteHistogram(commute)
 
 attributes = {
     'crime' : {
@@ -50,8 +69,8 @@ attributes = {
         'high':School(graduation_rate=0.95, reading_rate=0.85, math_rate=0.65, ap_enrollment=0.25, avgsat_score=1225, avgact_score=25, student_density=30, inexperience_ratio=0.1)},
     'space' : Space(sqft=1500, bedrooms=3, rooms=6),
     'quality' : Quality(yearbuilt=2000), 
-    'proximity' : Proximity(),  
-    'community' : Community()}
+    'proximity' : Proximity(commute=commutehistogram),  
+    'community' : Community(race=racehistogram, origin=originhistogram, education=educationhistogram, language=languagehistogram, english=englishhistogram, children=childrenhistogram, age=agehistogram)}
 
 housing = Housing(cost=1750, rent=3000, price=400000, unit='House', **attributes)
 utility = household('owner', housing, economy=economy, date=Date(year=2020))

@@ -7,6 +7,7 @@ Created on Sun Feb 23 2020
 """
 
 from collections import namedtuple as ntuple
+from collections import OrderedDict as ODict
 
 from utilities.strings import uppercase
 
@@ -28,7 +29,10 @@ class Rates(ntuple('Rates', 'discount wealth value income mortgage studentloan d
     def __getitem__(self, key): self.todict()[key]
     def todict(self): return self._asdict()    
     
-    def __repr__(self): return '{}(discount={}, wealth={}, value={}, income={}, mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
+    def __repr__(self):  
+        fmt = '{}(discount={}, wealth={}, value={}, income={}, mortgage={}, studentloan={}, debt={})'
+        return fmt.format(self.__class__.__name__, *self._fields)
+        
     def __new__(cls, basis, *args, **kwargs): 
         if basis == 'year': function = lambda rate: pow(rate + 1, 1/12) - 1
         elif basis == 'month': function = lambda rate: rate
@@ -52,7 +56,10 @@ class Durations(ntuple('Duration', 'mortgage studentloan debt')):
     def __getitem__(self, key): self.todict()[key]
     def todict(self): return self._asdict()    
     
-    def __repr__(self): return '{}(mortgage={}, studentloan={}, debt={})'.format(self.__class__.__name__, *self._fields)
+    def __repr__(self): 
+        fmt = '{}(mortgage={}, studentloan={}, debt={})'
+        return fmt.format(self.__class__.__name__, *self._fields)
+        
     def __new__(cls, basis, *args, **kwargs): 
         if basis == 'year': function = lambda rate: rate * 12
         elif basis == 'month': function = lambda rate: rate
@@ -67,6 +74,7 @@ class Economy(ntuple('Economy', 'rates durations risk price commisions financing
     def __repr__(self): 
         fmt = '{}(rates={}, durations={}, price={}, commisions={}, financing={}, coverage={}, loantovalue={})' 
         return fmt.format(self.__class__.__name__, repr(self.rates), repr(self.durations), *self._fields[1:])
+    
     def __new__(cls, *args, rates, durations, **kwargs):
         assert isinstance(rates, Rates)
         assert isinstance(rates, Durations)
@@ -77,8 +85,12 @@ class Loan(ntuple('Loan', 'name balance rate duration')):
     def __getitem__(self, key): self.todict()[key]
     def todict(self): return self._asdict()    
 
-    def __repr__(self): return '{}(name={}, balance={}, rate={}, duration={})'.format(self.__class__.__name__, *self._fields)
-    def __str__(self): return '{name} | ${balance} for {duration} PERS @ {rate} %/PER'.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict()})
+    def __repr__(self): 
+        fmt = '{}(name={}, balance={}, rate={}, duration={})'
+        return fmt.format(self.__class__.__name__, *self._fields)    
+    def __str__(self): 
+        fmt = '{name}|${balance} for {duration}PERS @{rate}%/PER'
+        return fmt.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})
 
     @property
     def factor(self): return 1 + self.rate
@@ -186,36 +198,77 @@ class Household(ntuple('Household', 'age race origin language english education 
         self.financials, self.utility = financials, utility
            
     def __call__(self, tenure, housing, *args, economy, **kwargs):
-        if tenure == 'renter': financials, cost = self.financials.sale(*args, **kwargs), housing.rentercost
-        elif tenure == 'owner': financials, cost = self.financials.buy(housing.price, *args, **kwargs), housing.ownercost
+        if tenure == 'renter': financials, cost = self.financials.sale(*args, **kwargs), housing.rentercost()
+        elif tenure == 'owner': financials, cost = self.financials.buy(housing.price(), *args, **kwargs), housing.ownercost()
         else: raise ValueError(tenure)
         total_consumption = self.financials(self, *args, economy=economy, **kwargs)
         housing_consumption = financials + cost        
         economic_consumption = total_consumption - housing_consumption
         return self.utility(self, *args, consumption=economic_consumption / economy.price, **housing.todict(), **kwargs)
 
+#####################################################################################################################################
 
-class Housing(ntuple('Housing', 'unit crimes schools space community proximity quality')):  
+class HousingGroup(ntuple('HousingGroup', 'name unit geoID year sqft price rent')):
     def __getitem__(self, key): self.todict()[key]
     def todict(self): return self._asdict()
     
-    def __new__(cls, *args, **kwargs): 
-        return super().__new__(cls, *[field for field in cls._fields])     
-    def __init__(self, *args, cost, rent, price, **kwargs): 
-        self.price, self.cost, self.rent = price, cost, rent
-
-    @property
-    def rentercost(self): return self.rent * self.space.sqft
-    @property
-    def ownercost(self): return self.cost * self.space.sqft
-    @property
-    def price(self): return self.price * self.space.sqft
+    def __repr__(self): 
+        fmt = '{}(name={}, unit={}, geoID={}, year={}, sqft={}, price={}, rent={})'
+        return fmt.format(self.__class__.__name__, self.unit, self.geoID, repr(self.year), repr(self.sqft), repr(self.price), repr(self.rent))    
+    def __str__(self): 
+        formats = ODict([('year', 'builtin {year}'), ('sqft', 'with {sqft}'), ('rent', '@{rent} forRent'), ('price', '@{price} forSale')]) 
+        fmt = '{name}|{unit} in {geoID}'         
+        fmt = fmt + ' '.join([formats[attr] for attr in ('year', 'sqft') if self[attr] is not None])
+        fmt = fmt + ' & '.join([formats[attr] for attr in ('rent', 'price') if self[attr] is not None])
+        return fmt.format({key:str(value) for key, value in self.todict().items() if value is not None})
     
+    def __new__(cls, *args, name, unit, geography, year=None, sqft=None, price=None, rent=None, **kwargs):
+        assert all([hasattr(item, 'lower') and hasattr(item, 'upper') for item in (year, sqft, price, rent) if item is not None])
+        return super().__new__(cls, name, unit, geography.geoID, year, sqft, price, rent)
 
-        
-        
-        
-        
+    def __contains__(self, housing):
+       equal = lambda attr: housing[attr] == self[attr] if self[attr] is not None else True
+       contain = lambda attr: housing[attr] >= self[attr].lower and housing[attr] <= self[attr].upper if self[attr] is not None else True
+       return all([equal('unit'), equal('geoID'), contain('year'), contain('sqft'), contain('price'), contain('rent')])
+
+
+class HousingGroups(ODict):
+    pass
+
+
+class Housing(ntuple('Housing', 'crimes schools space community proximity quality')):  
+    def __getitem__(self, key): self.todict()[key]
+    def todict(self): return self._asdict()
+    
+    def rentercost(self): return self.__rentsqft * self.__sqft
+    def ownercost(self): return self.__costsqft * self.__sqft    
+    def rent(self): return self.__rentsqft * self.__sqft
+    def price(self): return self.__pricesqft * self.__sqft     
+    def geoID(self): return self.__geography.geoID
+
+    def __new__(cls, *args, **kwargs): return super().__new__(cls, *[field for field in cls._fields])         
+    def __init__(self, pricesqft, rentsqft, costsqft, *args, unit, geography, quality, space, **kwargs): 
+        self.__pricesqft = pricesqft
+        self.__rentsqft = rentsqft
+        self.__costsqft = costsqft
+        self.geography = geography
+        self.unit = unit        
+        self.year = quality.yearbuilt
+        self.sqft = space.sqft
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

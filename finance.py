@@ -17,6 +17,10 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
+_monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
+_monthduration = {'year': lambda rate: int(rate * 12), 'month': lambda rate: int(rate)}
+
+
 def theta(risktolerance, discountrate, wealthrate): 
     return (wealthrate - discountrate) / risktolerance   
 def income_integral(horizon, incomerate, wealthrate): 
@@ -34,11 +38,9 @@ def loan_integral(horizon, loanrate, wealthrate):
 
 
 def bank(name, *fields):
-    def __new__(cls, basis, *args, rate, duration, **kwargs):
-        durationfunctions = {'year': lambda rate: int(rate * 12), 'month': lambda rate: int(rate)}
-        ratefunctions = {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)}          
-        return super().__new__(cls, *args, rate=ratefunctions[basis](rate), duration=durationfunctions[basis](duration), **kwargs)
-          
+    def __new__(cls, basis, *args, rate, duration, **kwargs): 
+        return super().__new__(cls, *args, rate=_monthrate[basis](rate), duration=_monthduration[basis](duration), **kwargs)          
+
     base = ntuple(name, ' '.join(['rate', 'duration', *fields]))
     attrs = {'__new__':__new__}
     
@@ -64,7 +66,8 @@ class Economy(ntuple('Econcomy', 'wealthrate incomerate price')):
 class Loan(ntuple('Loan', 'name balance rate duration')):
     stringformat = '{name}|${balance} for {duration}PERS @{rate}%/PER' 
     def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
-          
+    def __hash__(self): return hash((self.__class__.__name__, self.name, self.balance, self.rate, self.duration,))      
+    
     @property
     def factor(self): return 1 + self.rate
     @property
@@ -90,13 +93,14 @@ class UnstableLifeStyleError(Exception):
 
 class Financials(ntuple('Financials', 'discountrate risktolerance wealth income value mortgage studentloan debt')):
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([field, repr(self[field])]) for field in self._fields]))  
+    def __hash__(self): return hash((self.__class__.__name__, self.discountrate, self.risktolerance, self.wealth, self.income, hash(self.mortgage), hash(self.studentloan), hash(self.debt),))    
+    
     def __new__(cls, basis, *args, discountrate, risktolerance, wealth, income, value, mortgage, studentloan, debt, **kwargs):        
-        ratefunctions = {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)}  
         if mortgage is None: mortgage = Loan('mortgage', 0, 0, 0) 
         if studentloan is None: studentloan = Loan('studentloan', 0, 0, 0)
         if debt is None: debt = Loan('debt', 0, 0, 0)
         assert all([isinstance(loan, Loan) for loan in (mortgage, studentloan, debt)])
-        return super().__new__(cls, ratefunctions[basis](discountrate), risktolerance, wealth, income, value, mortgage, studentloan, debt)   
+        return super().__new__(cls, _monthrate[basis](discountrate), risktolerance, wealth, income, value, mortgage, studentloan, debt)   
     
     @property
     def coverage(self): return self.income / (self.mortgage.payment + self.studentloan.payment + self.debt.payment)
@@ -118,13 +122,13 @@ class Financials(ntuple('Financials', 'discountrate risktolerance wealth income 
         if newfinancials.coverage < bank.coverage: raise InsufficientCoverageError(newfinancials, bank.coverage)
         return newfinancials
       
-    def __call__(self, household, *args, economy, **kwargs): 
-        w = self.wealth - (household.horizonwealth / pow(1 + economy.wealthrate, household.horizon)) 
-        i = income_integral(min(household.horizon, household.retirement), economy.incomerate, economy.wealthrate)
-        c = consumption_integal(household.horizon, self.discountrate, economy.wealthrate, self.risktolerance)
-        m = loan_integral(min(household.horizon, self.mortgage.duration), self.mortgage.rate, economy.wealthrate)
-        s = loan_integral(min(household.horizon, self.studentloan.duration), self.studentloan.rate, economy.wealthrate)
-        d = loan_integral(min(household.horizon, self.debt.duration), self.debt.rate, economy.wealthrate)        
+    def __call__(self, horizon_periods, income_periods, horizon_wealth, *args, economy, **kwargs): 
+        w = self.wealth - (horizon_wealth / pow(1 + economy.wealthrate, horizon_periods)) 
+        i = income_integral(min(horizon_periods, income_periods), economy.incomerate, economy.wealthrate)
+        c = consumption_integal(horizon_periods, self.discountrate, economy.wealthrate, self.risktolerance)
+        m = loan_integral(min(horizon_periods, self.mortgage.duration), self.mortgage.rate, economy.wealthrate)
+        s = loan_integral(min(horizon_periods, self.studentloan.duration), self.studentloan.rate, economy.wealthrate)
+        d = loan_integral(min(horizon_periods, self.debt.duration), self.debt.rate, economy.wealthrate)        
         consumption = (w + (i * self.income) - (m * self.mortgage.balance) - (s * self.studentloan.balance) - (d * self.debt.balance)) / c
         if consumption < 0: raise UnstableLifeStyleError(consumption)
         return consumption

@@ -122,8 +122,8 @@ class Financials(ntuple('Financials', 'discountrate risktolerance wealth income 
         if newfinancials.coverage < bank.coverage: raise InsufficientCoverageError(newfinancials, bank.coverage)
         return newfinancials
       
-    def __call__(self, horizon_periods, income_periods, horizon_wealth, *args, economy, **kwargs): 
-        w = self.wealth - (horizon_wealth / pow(1 + economy.wealthrate, horizon_periods)) 
+    def __call__(self, horizon_periods, income_periods, horizon_wealth_multiple, *args, economy, **kwargs): 
+        w = self.wealth - ((self.wealth * horizon_wealth_multiple) / pow(1 + economy.wealthrate, horizon_periods)) 
         i = income_integral(min(horizon_periods, income_periods), economy.incomerate, economy.wealthrate)
         c = consumption_integal(horizon_periods, self.discountrate, economy.wealthrate, self.risktolerance)
         m = loan_integral(min(horizon_periods, self.mortgage.duration), self.mortgage.rate, economy.wealthrate)

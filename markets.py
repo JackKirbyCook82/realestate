@@ -14,7 +14,7 @@ from realestate.finance import InsufficientFundsError, InsufficientCoverageError
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['PropertyMarket', 'InvestmentMarket', 'ConstructionMarket']
+__all__ = ['PropertyMarket']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -97,29 +97,6 @@ class PropertyMarket(object):
         return self
         
     
-class InvestmentMarket(object):
-    def __init__(self, *args, housings=[], **kwargs):
-        assert all([isinstance(housing, Housing) for housing in _aslist(housings)])
-        self.__housing = _aslist(housings)
-
-
-class ConstructionMarket(object):
-    def __init__(self, *args, housings=[], **kwargs):
-        assert all([isinstance(housing, Housing) for housing in _aslist(housings)])
-        self.__housing = _aslist(housings)
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

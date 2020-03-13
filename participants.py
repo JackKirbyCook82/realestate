@@ -31,7 +31,7 @@ class DeceasedHouseholderError(Exception):
     def __init__(self, age): super().__init__('{} > {}'.format(age, DEATH))
     
 
-class Household(ntuple('Household', 'age race origin language english education children size')):
+class Household(ntuple('Household', 'age race origin language education children size')):
     stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'
     def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self.todict().items()})
     def __init__(self, *args, financials, utility, date, **kwargs): self.__utility, self.__financials, self.__date = utility, financials, date    

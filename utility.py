@@ -29,7 +29,7 @@ SCHOOLS = {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'str
 QUALITY = {'age':1}
 SPACE =  {'bed/ppl':3, 'sqft/ppl':2, 'sqft':1, 'sqft/bedroom':3}
 PROXIMITY = {'avgcommute':1, 'midcommute':1, 'stdcommute':1}
-COMMUNITY = {'race':3, 'age':2, 'children':2, 'origin':4, 'education':1, 'language':3, 'english':3}
+COMMUNITY = {'race':3, 'age':2, 'children':2, 'origin':4, 'education':1, 'language':3}
 
 UTILITY_INDEXES = registry()
 UTILITY_FUNCTIONS = {'housing': UtilityFunction.create('cobbdouglas')}
@@ -103,7 +103,7 @@ class Community_UtilityIndex:
         category_percent = lambda attr: community[attr][household[attr]]/community[attr].total()     
         category_variable = lambda attr: community[attr].xdev(str(household[attr]))
         return {'race':category_percent('race'), 'origin':category_percent('origin'), 'language':category_percent('language'), 'children':category_percent('children'),
-                'age':community.age.xdev(household.age, bounds=household.household_lifetime), 'education':category_variable('education'), 'english':category_variable('english')}
+                'age':community.age.xdev(household.age, bounds=household.household_lifetime), 'education':category_variable('education')}
 
 
 

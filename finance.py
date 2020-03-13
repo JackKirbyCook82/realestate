@@ -77,8 +77,8 @@ class Loan(ntuple('Loan', 'name balance rate duration')):
     @property
     def principal(self): return self.payment - self.interest
     
-    def __call__(self, duration, *args, basis='monthly', **kwargs): 
-        duration = min(_monthduration[basis](duration), self.duration)
+    def __call__(self, duration_monthly, *args, **kwargs): 
+        duration = min(duration_monthly, self.duration)
         newbalance = self.balance * (pow(self.factor, duration) - pow(self.factor, self.duration)) / (pow(self.factor, duration) - 1)
         return self.__class__(self.name, min(newbalance, 0), self.rate, self.duration - duration)
 
@@ -133,14 +133,13 @@ class Financials(ntuple('Financials', 'discountrate risktolerance wealth income 
         if consumption < 0: raise UnstableLifeStyleError(consumption)
         return consumption
        
-    def __call__(self, duration, *args, basis='monthly', economy, **kwargs): 
-        duration = min(_monthduration[basis](duration), self.duration)
-        wealth = self.wealth * pow(1 + economy.wealthrate, duration)
-        income = self.income * pow(1 + economy.incomerate, duration)
-        value = self.economy * pow(1 + economy.valuerate, duration)
-        mortgage = self.mortgage(duration, *args, basis='monthly', **kwargs) 
-        studentloan = self.studentloan(duration, *args, basis='monthly', **kwargs)
-        debt = self.debt(duration, *args, basis='monthly', **kwargs)
+    def __call__(self, duration_months, *args, economy, **kwargs): 
+        wealth = self.wealth * pow(1 + economy.wealthrate, duration_months)
+        income = self.income * pow(1 + economy.incomerate, duration_months)
+        value = self.economy * pow(1 + economy.valuerate, duration_months)
+        mortgage = self.mortgage(duration_months, *args, basis='monthly', **kwargs) 
+        studentloan = self.studentloan(duration_months, *args, basis='monthly', **kwargs)
+        debt = self.debt(duration_months, *args, basis='monthly', **kwargs)
         return self.__class__(self.discountrate, self.risktolerance, wealth, income, value, mortgage, studentloan, debt)      
 
 

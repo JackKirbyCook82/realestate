@@ -23,8 +23,6 @@ RETIREMENT = 65
 DEATH = 95
 
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
-_monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
-_monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
 
 
 class PrematureHouseholderError(Exception):
@@ -67,10 +65,9 @@ class Household(ntuple('Household', 'age race origin language english education 
         economic_consumption = total_consumption - housing_consumption
         return self.__utility(self, *args, consumption=economic_consumption/economy.price, **housing.todict(), date=self.__date, **kwargs)
     
-    def __call__(self, duration, *args, basis='monthly', **kwargs): 
-        duration = min(_monthduration[basis](duration), self.duration)
-        self.__date = self.__date.add(months=duration)
-        self.__financials = self.__financials(duration, *args, basis='monthly', **kwargs)
+    def __call__(self, duration_months, *args, **kwargs): 
+        self.__date = self.__date.add(months=duration_months)
+        self.__financials = self.__financials(duration_months, *args, **kwargs)
         return self
     
 
@@ -129,10 +126,9 @@ class Housing(ntuple('Housing', 'unit cost geography crimes schools space commun
     @property
     def rentercost(self): return self.__sqftrent * self.sqft
 
-    def __call__(self, duration, *args, basis='monthly', pricerate, rentrate, **kwargs): 
-        duration = min(_monthduration[basis](duration), self.duration)
-        self.__sqftrent = self.__sqftrent * pow(1 + pricerate, duration)
-        self.__sqftprice = self.__sqftprice * pow(1 + rentrate, duration)
+    def __call__(self, duration_months, *args, pricerate, rentrate, **kwargs): 
+        self.__sqftrent = self.__sqftrent * pow(1 + pricerate, duration_months)
+        self.__sqftprice = self.__sqftprice * pow(1 + rentrate, duration_months)
         return self
 
 

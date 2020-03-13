@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Feb 23 2020
-@name:   Real Estate Market Valuation Application
+@name:   Real Estate Valuation Application
 @author: Jack Kirby Cook
 
 """

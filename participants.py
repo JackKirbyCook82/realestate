@@ -1,22 +1,19 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Feb 23 2020
-@name:   Real Estate Market Participants
+@name:   Real Estate Participants Objects
 @author: Jack Kirby Cook
 
 """
 
 from collections import namedtuple as ntuple
-from scipy import stats
-import numpy as np
+import math
 
 from utilities.strings import uppercase
 
-from realestate.finance import InsufficientFundsError, InsufficientCoverageError, UnstableLifeStyleError
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Market', 'Housing', 'Household']
+__all__ = ['Housing', 'Household']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -26,12 +23,8 @@ RETIREMENT = 65
 DEATH = 95
 
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
-_zscore = lambda x: stats.zscore(x)
-_threshold = lambda x, z: x > z
-_minmax = lambda x: (x - np.min(x))/(np.max(x) - np.min(x))
-_normalize = lambda x: x / np.sum(x) if np.sum(x) > 0 else x
-_fill = lambda x: np.ones(len(x)) * 1/len(x) if np.sum(x) == 0 else x
-_summation = lambda x: np.sum(x) 
+_monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
+_monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
 
 
 class PrematureHouseholderError(Exception):
@@ -43,7 +36,7 @@ class DeceasedHouseholderError(Exception):
 class Household(ntuple('Household', 'age race origin language english education children size')):
     stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'
     def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self.todict().items()})
-    def __init__(self, *args, financials, utility, **kwargs): self.utility, self.financials = utility, financials    
+    def __init__(self, *args, financials, utility, date, **kwargs): self.__utility, self.__financials, self.__date = utility, financials, date    
     def __new__(cls, *args, age, **kwargs):
         if age < ADULTHOOD: raise PrematureHouseholderError(age)
         if age > ADULTHOOD: raise DeceasedHouseholderError(age)                   
@@ -65,26 +58,30 @@ class Household(ntuple('Household', 'age race origin language english education 
     @property
     def household_incometime(self): return [ADULTHOOD, RETIREMENT]
          
-    def __call__(self, housing, horizon_years, horizon_wealth_multiple, *args, economy, **kwargs):
+    def utility(self, housing, tenure, horizon_years, horizon_wealth_multiple, *args, economy, **kwargs):
         horizon_periods, income_periods = self.horizon_period(self.horizon_age(horizon_years)), self.income_periods()
-        if housing.tenure == 'renter': financials, cost = self.financials.sale(*args, **kwargs), housing.rentercost
-        elif housing.tenure == 'owner': financials, cost = self.financials.buy(housing.price, *args, **kwargs), housing.ownercost
-        total_consumption = self.financials(horizon_periods, income_periods, horizon_wealth_multiple, *args, economy=economy, **kwargs)
+        if tenure == 'renter': financials, cost = self.__financials.sale(*args, **kwargs), housing.rentercost
+        elif tenure == 'owner': financials, cost = self.__financials.buy(housing.price, *args, **kwargs), housing.ownercost
+        total_consumption = self.__financials.consumption(horizon_periods, income_periods, horizon_wealth_multiple, *args, economy=economy, **kwargs)
         housing_consumption = financials + cost        
         economic_consumption = total_consumption - housing_consumption
-        return self.utility(self, *args, consumption=economic_consumption/economy.price, **housing.todict(), **kwargs)
-
+        return self.__utility(self, *args, consumption=economic_consumption/economy.price, **housing.todict(), date=self.__date, **kwargs)
+    
+    def __call__(self, duration, *args, basis='monthly', **kwargs): 
+        duration = min(_monthduration[basis](duration), self.duration)
+        self.__date = self.__date.add(months=duration)
+        self.__financials = self.__financials(duration, *args, basis='monthly', **kwargs)
+        return self
+    
 
 class Housing(ntuple('Housing', 'unit cost geography crimes schools space community proximity quality')):  
-    stringformat = 'Housing|{tenure}{unit} ${cost} with {sqft}SQFT in {geography} builtin {year}'
+    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase'
     def __str__(self): 
-        if self.tenure == 'renter': cost = self.rentercost()
-        elif self.tenure == 'owner': cost = self.price()
-        else: raise ValueError(self.tenure)
-        content = dict(tenure=uppercase(self.tenure), unit=uppercase(self.unit), sqft=self.sqft, year=self.year, geography=str(self.geography), cost=cost)
+        content = dict(unit=uppercase(self.unit), sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price)
         return self.stringformat.format(**content)
 
-    __instances, __count = {}, 0
+    __instances = {} 
+    __count = 0
     def __new__(cls, *args, **kwargs):
         instance = super().__new__(cls, [kwargs[field] for field in cls._fields])
         if hash(instance) in cls.__instances: 
@@ -95,10 +92,10 @@ class Housing(ntuple('Housing', 'unit cost geography crimes schools space commun
             cls.__instances[hash(instance)] = instance
             return instance
         
-    def __init__(self, tenure, sqftrent, sqftprice, *args, **kwargs):
-        self.__tenure = tenure
-        self.__sqftrent = sqftrent
-        self.__sqftprice = sqftprice
+    def __init__(self, sqftprice, sqftrent,  *args, rentalrate, **kwargs):
+        assert 0 < rentalrate < 1
+        self.__sqftrent, self.__sqftprice = sqftrent, sqftprice
+        self.__rentalrate, self.__ownerrate = rentalrate, property(lambda: 1 - self.__rentalrate)
         
     def todict(self): return self._asdict()
     def __getitem__(self, key): return self.todict()[key]    
@@ -112,70 +109,31 @@ class Housing(ntuple('Housing', 'unit cost geography crimes schools space commun
         return all([getattr(other, field) == getattr(self, field) for field in self._fields])
     
     @property
-    def tenure(self): return self.__tenure
+    def count(self): return self.__count     
     @property
-    def count(self): return self.__count       
+    def rentercount(self): return math.floor(self.__count * self.__rentalrate)
+    @property
+    def ownercount(self): return math.ceil(self.__count * self.__ownerrate)
+    
+    @property
+    def geoID(self): return self.geography.geoID    
     @property
     def year(self): return self.quality.yearbuilt
     @property
     def sqft(self): return self.space.sqft
+    
+    @property
+    def price(self): return self.__sqftprice * self.sqft      
     @property
     def ownercost(self): return self.costsqft * self.sqft    
     @property
     def rentercost(self): return self.__sqftrent * self.sqft
-    @property
-    def price(self): return self.__sqftprice * self.sqft  
-    @property
-    def geoID(self): return self.geography.geoID
 
-
-class Market(object):
-    def __init__(self, households=[], housings=[]):
-        assert all([isinstance(household, Household) for household in _aslist(households)])
-        assert all([isinstance(housing, Housing) for housing in _aslist(housings)])
-        self.__households = _aslist(households)
-        self.__housing = _aslist(housings)
-
-    def __call__(self, horizon_years, horizon_wealth_multiple, *args, **kwargs):
-        utility_matrix = self.utility_matrix(horizon_years, horizon_wealth_multiple, *args, **kwargs)
-        demand_matrix = self.demand_matrix(utility_matrix, *args, **kwargs)
-        supply_matrix = self.supply_matrix(*args, **kwargs)
-        demand_supply_matrix = demand_matrix / supply_matrix
-        return demand_supply_matrix
-
-    def utility_matrix(self, horizon_years, horizon_wealth_multiple, *args, **kwargs):
-        utilitymatrix = np.zeros((len(self.__housing), len(self.__households)))
-        for i, housing in enumerate(self.__housing):
-            for j, household in enumerate(self.__households):
-                try: utilitymatrix[i, j] = household(housing, horizon_years, horizon_wealth_multiple, *args, **kwargs)
-                except InsufficientFundsError: pass
-                except InsufficientCoverageError: pass
-                except UnstableLifeStyleError: pass
-        return utilitymatrix
-
-    def demand_matrix(self, utilitymatrix, *args, **kwargs):
-        pass      
-
-    def supply_matrix(self, *args, **kwargs):
-        pass
-
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
-
-
-
+    def __call__(self, duration, *args, basis='monthly', pricerate, rentrate, **kwargs): 
+        duration = min(_monthduration[basis](duration), self.duration)
+        self.__sqftrent = self.__sqftrent * pow(1 + pricerate, duration)
+        self.__sqftprice = self.__sqftprice * pow(1 + rentrate, duration)
+        return self
 
 
 

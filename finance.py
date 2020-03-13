@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Feb 23 2020
-@name:   Real Estate Market Finance
+@name:   Real Estate Finance Objects
 @author: Jack Kirby Cook
 
 """
@@ -18,7 +18,7 @@ __license__ = ""
 
 
 _monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
-_monthduration = {'year': lambda rate: int(rate * 12), 'month': lambda rate: int(rate)}
+_monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
 
 
 def theta(risktolerance, discountrate, wealthrate): 
@@ -57,16 +57,16 @@ class StudentLoanBank: pass
 
 class Broker(ntuple('Broker', 'commisions')): pass
 
-class Economy(ntuple('Econcomy', 'wealthrate incomerate price')): 
-    def __new__(cls, basis, *args, wealthrate, incomerate, price, **kwargs):
-        ratefunctions = {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)}          
-        return super().__new__(cls, wealthrate=ratefunctions[basis](wealthrate), incomerate=ratefunctions[basis](incomerate), price=price)
+class Economy(ntuple('Econcomy', 'wealthrate incomerate valuerate price')): 
+    def __new__(cls, basis, *args, wealthrate, incomerate, valuerate, price, **kwargs):      
+        return super().__new__(cls, _monthrate[basis](wealthrate), _monthrate[basis](incomerate), _monthrate[basis](valuerate), price)
 
 
 class Loan(ntuple('Loan', 'name balance rate duration')):
     stringformat = '{name}|${balance} for {duration}PERS @{rate}%/PER' 
     def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
-    def __hash__(self): return hash((self.__class__.__name__, self.name, self.balance, self.rate, self.duration,))      
+    def __hash__(self): return hash((self.__class__.__name__, self.name, self.balance, self.rate, self.duration,))       
+    def __new__(cls, basis, *args, name, balance, rate, duration, **kwargs): return super().__new__(cls, name, balance, _monthrate[basis](rate), _monthduration[basis](duration))   
     
     @property
     def factor(self): return 1 + self.rate
@@ -77,10 +77,10 @@ class Loan(ntuple('Loan', 'name balance rate duration')):
     @property
     def principal(self): return self.payment - self.interest
     
-    def __call__(self, duration): 
-        duration = min(duration, self.duration)
+    def __call__(self, duration, *args, basis='monthly', **kwargs): 
+        duration = min(_monthduration[basis](duration), self.duration)
         newbalance = self.balance * (pow(self.factor, duration) - pow(self.factor, self.duration)) / (pow(self.factor, duration) - 1)
-        return self.__class__(min(newbalance, 0), self.rate, self.duration - duration)
+        return self.__class__(self.name, min(newbalance, 0), self.rate, self.duration - duration)
 
 
 class InsufficientFundsError(Exception):
@@ -122,7 +122,7 @@ class Financials(ntuple('Financials', 'discountrate risktolerance wealth income 
         if newfinancials.coverage < bank.coverage: raise InsufficientCoverageError(newfinancials, bank.coverage)
         return newfinancials
       
-    def __call__(self, horizon_periods, income_periods, horizon_wealth_multiple, *args, economy, **kwargs): 
+    def consumption(self, horizon_periods, income_periods, horizon_wealth_multiple, *args, economy, **kwargs): 
         w = self.wealth - ((self.wealth * horizon_wealth_multiple) / pow(1 + economy.wealthrate, horizon_periods)) 
         i = income_integral(min(horizon_periods, income_periods), economy.incomerate, economy.wealthrate)
         c = consumption_integal(horizon_periods, self.discountrate, economy.wealthrate, self.risktolerance)
@@ -133,7 +133,15 @@ class Financials(ntuple('Financials', 'discountrate risktolerance wealth income 
         if consumption < 0: raise UnstableLifeStyleError(consumption)
         return consumption
        
-
+    def __call__(self, duration, *args, basis='monthly', economy, **kwargs): 
+        duration = min(_monthduration[basis](duration), self.duration)
+        wealth = self.wealth * pow(1 + economy.wealthrate, duration)
+        income = self.income * pow(1 + economy.incomerate, duration)
+        value = self.economy * pow(1 + economy.valuerate, duration)
+        mortgage = self.mortgage(duration, *args, basis='monthly', **kwargs) 
+        studentloan = self.studentloan(duration, *args, basis='monthly', **kwargs)
+        debt = self.debt(duration, *args, basis='monthly', **kwargs)
+        return self.__class__(self.discountrate, self.risktolerance, wealth, income, value, mortgage, studentloan, debt)      
 
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Feb 23 2020
-@name:   Real Estate Participants Objects
+@name:   Real Estate Player Objects
 @author: Jack Kirby Cook
 
 """

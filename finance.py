@@ -56,7 +56,6 @@ class StudentLoanBank: pass
     
 
 class Broker(ntuple('Broker', 'commisions')): pass
-
 class Economy(ntuple('Econcomy', 'wealthrate incomerate valuerate price')): 
     def __new__(cls, basis, *args, wealthrate, incomerate, valuerate, price, **kwargs):      
         return super().__new__(cls, _monthrate[basis](wealthrate), _monthrate[basis](incomerate), _monthrate[basis](valuerate), price)

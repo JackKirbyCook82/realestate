@@ -71,7 +71,7 @@ class Household(ntuple('Household', 'age race origin language education children
         return self
     
 
-class Housing(ntuple('Housing', 'unit cost geography crimes schools space community proximity quality')):  
+class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space community proximity quality')):  
     stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase'
     def __str__(self): 
         content = dict(unit=uppercase(self.unit), sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price)
@@ -122,7 +122,7 @@ class Housing(ntuple('Housing', 'unit cost geography crimes schools space commun
     @property
     def price(self): return self.__sqftprice * self.sqft      
     @property
-    def ownercost(self): return self.costsqft * self.sqft    
+    def ownercost(self): return self.__sqftcost * self.sqft    
     @property
     def rentercost(self): return self.__sqftrent * self.sqft
 

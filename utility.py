@@ -8,7 +8,7 @@ Created on Sun Feb 23 2020
 
 import numpy as np
 
-from utilities.utility import UtilityIndex, UtilityFunction
+from utilities.utility import UtilityIndex, CobbDouglas_UtilityFunction
 from utilities.dictionarys import CallSliceOrderedDict as registry
 
 __version__ = "1.0.0"
@@ -32,7 +32,7 @@ PROXIMITY = {'avgcommute':1, 'midcommute':1, 'stdcommute':1}
 COMMUNITY = {'race':3, 'age':2, 'children':2, 'origin':4, 'education':1, 'language':3}
 
 UTILITY_INDEXES = registry()
-UTILITY_FUNCTIONS = {'housing': UtilityFunction.create('cobbdouglas')}
+UTILITY_FUNCTIONS = {'housing': CobbDouglas_UtilityFunction}
 
 _flatten = lambda nesteditems: [item for items in nesteditems for item in items]
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)

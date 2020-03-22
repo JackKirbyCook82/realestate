@@ -19,6 +19,7 @@ __license__ = ""
 
 _monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
 _monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
+_monthincome = {'year': lambda income: int(income / 12), 'month': lambda income: int(income)}
 
 
 def theta(risktolerance, discountrate, wealthrate): 
@@ -37,21 +38,27 @@ def loan_integral(horizon, loanrate, wealthrate):
     return  x * y 
 
 
-def bank(name, *fields):
-    def __new__(cls, basis, *args, rate, duration, **kwargs): 
-        return super().__new__(cls, *args, rate=_monthrate[basis](rate), duration=_monthduration[basis](duration), **kwargs)          
+def bank(banktype, *fields):
+    def __new__(cls, basis, *args, name, rate, duration, **kwargs): 
+        return super(cls, cls).__new__(cls, *args, name=name, rate=_monthrate[basis](rate), duration=_monthduration[basis](duration), **kwargs)          
+    def __call__(self, amount): 
+        return Loan('month', banktype, amount, self.rate, self.duration)
 
-    base = ntuple(name, ' '.join(['rate', 'duration', *fields]))
-    attrs = {'__new__':__new__}
-    
-    def decorator(subclass): return type(name, (subclass, base), attrs)
+    stringformat = '{name}|Providing {rate}%/MO for {duration}-MOS' 
+    def __str__(self): return self.stringformat.format()        
+    def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))  
+
+    def decorator(subclass): 
+        base = ntuple(subclass.__name__, ' '.join(['name', 'rate', 'duration', *fields]))
+        attrs = {'__new__':__new__, '__call__':__call__, '__str__':__str__, '__repr__':__repr__, stringformat:stringformat}
+        return type(subclass.__name__, (subclass, base), attrs)
     return decorator
 
-@bank('financing', 'coverage', 'loantovalue')
+@bank('mortgage', 'financing', 'coverage', 'loantovalue')
 class MortgageBank: pass
-@bank.create()
+@bank('credit')
 class CreditBank: pass
-@bank.create()
+@bank('studentloan')
 class StudentLoanBank: pass
     
 
@@ -62,8 +69,9 @@ class Economy(ntuple('Econcomy', 'wealthrate incomerate valuerate price')):
 
 
 class Loan(ntuple('Loan', 'name balance rate duration')):
-    stringformat = '{name}|${balance} for {duration}PERS @{rate}%/PER' 
+    stringformat = '{name}|${balance} for {duration}-MOS @{rate}%/MO' 
     def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
+    def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))  
     def __hash__(self): return hash((self.__class__.__name__, self.name, self.balance, self.rate, self.duration,))       
     def __new__(cls, basis, *args, name, balance, rate, duration, **kwargs): return super().__new__(cls, name, balance, _monthrate[basis](rate), _monthduration[basis](duration))   
     
@@ -91,6 +99,9 @@ class UnstableLifeStyleError(Exception):
 
 
 class Financials(ntuple('Financials', 'discountrate risktolerance wealth income value mortgage studentloan debt')):
+    stringformat = 'Financials|Assets=${assets:.0f}, Debt=${debt:.0f}, Income=${income:.0f}/MO'
+    def __str__(self): return self.stringformat(assets=self.wealth+self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance)   
+    
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([field, repr(self[field])]) for field in self._fields]))  
     def __hash__(self): return hash((self.__class__.__name__, self.discountrate, self.risktolerance, self.wealth, self.income, hash(self.mortgage), hash(self.studentloan), hash(self.debt),))    
     
@@ -99,7 +110,7 @@ class Financials(ntuple('Financials', 'discountrate risktolerance wealth income 
         if studentloan is None: studentloan = Loan('studentloan', 0, 0, 0)
         if debt is None: debt = Loan('debt', 0, 0, 0)
         assert all([isinstance(loan, Loan) for loan in (mortgage, studentloan, debt)])
-        return super().__new__(cls, _monthrate[basis](discountrate), risktolerance, wealth, income, value, mortgage, studentloan, debt)   
+        return super().__new__(cls, _monthrate[basis](discountrate), risktolerance, wealth, _monthincome[basis](income), value, mortgage, studentloan, debt)   
     
     @property
     def coverage(self): return self.income / (self.mortgage.payment + self.studentloan.payment + self.debt.payment)
@@ -112,13 +123,13 @@ class Financials(ntuple('Financials', 'discountrate risktolerance wealth income 
     def __downpayment(self, value, loantovalue): return value * (1 - loantovalue)
     
     def sale(self, *args, broker, **kwargs): return self.__class__(self.wealth + self.__proceeds(broker.commisions), self.income, 0, None, self.studentloan, self.debt)
-    def buy(self, value, *args, broker, bank, **kwargs): 
-        closingcost = self.__commisions(value, broker.commisions, bank.financing)
-        downpayment = self.__downpayment(value, bank.loantovalue)
-        mortgage = Loan('mortgage', value - downpayment, bank.rates, bank.durations)
+    def buy(self, value, *args, broker, mortgagebank, **kwargs): 
+        closingcost = self.__commisions(value, broker.commisions, mortgagebank.financing)
+        downpayment = self.__downpayment(value, mortgagebank.loantovalue)
+        mortgage = mortgagebank(value - downpayment)
         newfinancials = self.__class__(self.discountrate, self.risktolerance, self.wealth - downpayment - closingcost, self.income, value, mortgage, self.studentloan, self.debt)
         if newfinancials.wealth < 0: raise InsufficientFundsError(newfinancials)  
-        if newfinancials.coverage < bank.coverage: raise InsufficientCoverageError(newfinancials, bank.coverage)
+        if newfinancials.coverage < bank.coverage: raise InsufficientCoverageError(newfinancials, mortgagebank.coverage)
         return newfinancials
       
     def consumption(self, horizon_periods, income_periods, horizon_wealth_multiple, *args, economy, **kwargs): 

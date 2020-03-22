@@ -9,7 +9,7 @@ Created on Sun Feb 23 2020
 import numpy as np
 import math
 
-from realestate.participants import Household, Housing
+from realestate.players import Household, Housing
 from realestate.finance import InsufficientFundsError, InsufficientCoverageError, UnstableLifeStyleError
 
 __version__ = "1.0.0"

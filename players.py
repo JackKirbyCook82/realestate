@@ -33,7 +33,11 @@ class DeceasedHouseholderError(Exception):
 
 class Household(ntuple('Household', 'age race origin language education children size')):
     stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'
-    def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self.todict().items()})
+    def __str__(self): 
+        householdstr = self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self.todict().items()})
+        financialstr = str(self.__financials)
+        return '\n'.join([householdstr, financialstr])
+    
     def __init__(self, *args, financials, utility, date, **kwargs): self.__utility, self.__financials, self.__date = utility, financials, date    
     def __new__(cls, *args, age, **kwargs):
         if age < ADULTHOOD: raise PrematureHouseholderError(age)

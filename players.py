@@ -9,8 +9,6 @@ Created on Sun Feb 23 2020
 from collections import namedtuple as ntuple
 import math
 
-from utilities.strings import uppercase
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ['Housing', 'Household']
@@ -32,13 +30,18 @@ class DeceasedHouseholderError(Exception):
     
 
 class Household(ntuple('Household', 'age race origin language education children size')):
-    stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'
+    stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'   
     def __str__(self): 
-        householdstr = self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self.todict().items()})
+        contents = dict(age=self.age, race=self.__concepts['race'][self.race], origin=self.__concepts['origin'][self.origin], language=self.__concepts['language'][self.language],
+                        education=self.__concepts['education'][self.education], children=self.__concepts['children'][self.children], size=self.size)
+        householdstr = self.stringformat.format(**contents)
         financialstr = str(self.__financials)
         return '\n'.join([householdstr, financialstr])
     
-    def __init__(self, *args, financials, utility, date, **kwargs): self.__utility, self.__financials, self.__date = utility, financials, date    
+    def __init__(self, *args, financials, utility, date, concepts, **kwargs): 
+        self.__utility, self.__financials, self.__date = utility, financials, date    
+        self.__concepts = concepts
+    
     def __new__(cls, *args, age, **kwargs):
         if age < ADULTHOOD: raise PrematureHouseholderError(age)
         if age > ADULTHOOD: raise DeceasedHouseholderError(age)                   
@@ -76,9 +79,9 @@ class Household(ntuple('Household', 'age race origin language education children
     
 
 class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space community proximity quality')):  
-    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase'
+    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase' 
     def __str__(self): 
-        content = dict(unit=uppercase(self.unit), sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price)
+        content = dict(unit=self.__concepts['unit'][self.unit], sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price)
         return self.stringformat.format(**content)
 
     __instances = {} 
@@ -93,10 +96,11 @@ class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space co
             cls.__instances[hash(instance)] = instance
             return instance
         
-    def __init__(self, sqftprice, sqftrent,  *args, rentalrate, **kwargs):
+    def __init__(self, sqftprice, sqftrent,  *args, rentalrate, concepts, **kwargs):
         assert 0 < rentalrate < 1
         self.__sqftrent, self.__sqftprice = sqftrent, sqftprice
         self.__rentalrate, self.__ownerrate = rentalrate, property(lambda: 1 - self.__rentalrate)
+        self.__concepts = concepts
         
     def todict(self): return self._asdict()
     def __getitem__(self, key): return self.todict()[key]    

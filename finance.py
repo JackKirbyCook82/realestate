@@ -98,19 +98,20 @@ class UnstableLifeStyleError(Exception):
     def __init__(self, consumption): super().__init__('available={}, required={}'.format(consumption, 0))
 
 
-class Financials(ntuple('Financials', 'discountrate risktolerance wealth income value mortgage studentloan debt')):
+class Financials(ntuple('Financials', 'discountrate risktolerance income wealth value mortgage studentloan debt')):
     stringformat = 'Financials|Assets=${assets:.0f}, Debt=${debt:.0f}, Income=${income:.0f}/MO'
     def __str__(self): return self.stringformat(assets=self.wealth+self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance)   
     
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([field, repr(self[field])]) for field in self._fields]))  
     def __hash__(self): return hash((self.__class__.__name__, self.discountrate, self.risktolerance, self.wealth, self.income, hash(self.mortgage), hash(self.studentloan), hash(self.debt),))    
     
-    def __new__(cls, basis, *args, discountrate, risktolerance, wealth, income, value, mortgage, studentloan, debt, **kwargs):        
+    def __init__(self, *args, concepts, **kwargs): self.__concepts = concepts
+    def __new__(cls, basis, *args, discountrate, risktolerance, wealth, income, value, mortgage=None, studentloan=None, debt=None, **kwargs):        
         if mortgage is None: mortgage = Loan('mortgage', 0, 0, 0) 
         if studentloan is None: studentloan = Loan('studentloan', 0, 0, 0)
         if debt is None: debt = Loan('debt', 0, 0, 0)
         assert all([isinstance(loan, Loan) for loan in (mortgage, studentloan, debt)])
-        return super().__new__(cls, _monthrate[basis](discountrate), risktolerance, wealth, _monthincome[basis](income), value, mortgage, studentloan, debt)   
+        return super().__new__(cls, _monthrate[basis](discountrate), risktolerance, wealth, _monthincome[basis](income), value, mortgage, studentloan, debt)     
     
     @property
     def coverage(self): return self.income / (self.mortgage.payment + self.studentloan.payment + self.debt.payment)

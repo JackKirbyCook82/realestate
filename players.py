@@ -50,11 +50,11 @@ class Household(ntuple('Household', 'age race origin language education children
     def todict(self): return self._asdict()
     def __getitem__(self, key): return self.todict()[key]
         
-    def current_period(self): return int((self.age * 12) - (ADULTHOOD * 12)) 
-    def income_periods(self): return int((DEATH * 12) - self.period)
-    def life_periods(self): return int((RETIREMENT * 12) - self.period)
-    def horizon_age(self, horizon_years): return min(self.age + horizon_years, DEATH)
-    def horizon_period(self, horizon_age): return int((horizon_age * 12) - self.period) 
+    #def current_period(self): return int((self.age * 12) - (ADULTHOOD * 12)) 
+    #def income_periods(self): return int((DEATH * 12) - self.period)
+    #def life_periods(self): return int((RETIREMENT * 12) - self.period)
+    #def horizon_age(self, horizon_years): return min(self.age + horizon_years, DEATH)
+    #def horizon_period(self, horizon_age): return int((horizon_age * 12) - self.period) 
     
     @property
     def household_lifetime(self): return [ADULTHOOD, DEATH]
@@ -63,19 +63,19 @@ class Household(ntuple('Household', 'age race origin language education children
     @property
     def household_incometime(self): return [ADULTHOOD, RETIREMENT]
          
-    def utility(self, housing, tenure, horizon_years, horizon_wealth_multiple, *args, economy, **kwargs):
-        horizon_periods, income_periods = self.horizon_period(self.horizon_age(horizon_years)), self.income_periods()
-        if tenure == 'renter': financials, cost = self.__financials.sale(*args, **kwargs), housing.rentercost
-        elif tenure == 'owner': financials, cost = self.__financials.buy(housing.price, *args, **kwargs), housing.ownercost
-        total_consumption = self.__financials.consumption(horizon_periods, income_periods, horizon_wealth_multiple, *args, economy=economy, **kwargs)
-        housing_consumption = financials + cost        
-        economic_consumption = total_consumption - housing_consumption
-        return self.__utility(self, *args, consumption=economic_consumption/economy.price, **housing.todict(), date=self.__date, **kwargs)
+    #def utility(self, housing, tenure, horizon, wealth_multiple, *args, economy, **kwargs):
+    #    horizon_periods, income_periods = self.horizon_period(self.horizon_age(horizon)), self.income_periods()
+    #    if tenure == 'renter': financials, cost = self.__financials.sale(*args, **kwargs), housing.rentercost
+    #    elif tenure == 'owner': financials, cost = self.__financials.buy(housing.price, *args, **kwargs), housing.ownercost
+    #    total_consumption = self.__financials.consumption(horizon_periods, income_periods, wealth_multiple, *args, economy=economy, **kwargs)
+    #    housing_consumption = financials + cost        
+    #    economic_consumption = total_consumption - housing_consumption
+    #    return self.__utility(self, *args, consumption=economic_consumption/economy.price, **housing.todict(), date=self.__date, **kwargs)
     
-    def __call__(self, duration_months, *args, **kwargs): 
-        self.__date = self.__date.add(months=duration_months)
-        self.__financials = self.__financials(duration_months, *args, **kwargs)
-        return self
+    #def __call__(self, duration_months, *args, **kwargs): 
+    #    self.__date = self.__date.add(months=duration_months)
+    #    self.__financials = self.__financials(duration_months, *args, **kwargs)
+    #    return self
     
 
 class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space community proximity quality')):  
@@ -134,10 +134,10 @@ class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space co
     @property
     def rentercost(self): return self.__sqftrent * self.sqft
 
-    def __call__(self, duration_months, *args, pricerate, rentrate, **kwargs): 
-        self.__sqftrent = self.__sqftrent * pow(1 + pricerate, duration_months)
-        self.__sqftprice = self.__sqftprice * pow(1 + rentrate, duration_months)
-        return self
+    #def __call__(self, duration_months, *args, pricerate, rentrate, **kwargs): 
+    #    self.__sqftrent = self.__sqftrent * pow(1 + pricerate, duration_months)
+    #    self.__sqftprice = self.__sqftprice * pow(1 + rentrate, duration_months)
+    #    return self
 
 
 

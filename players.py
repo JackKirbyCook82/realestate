@@ -9,9 +9,12 @@ Created on Sun Feb 23 2020
 from collections import namedtuple as ntuple
 import math
 
+from utilities.strings import uppercase
+from realestate.finance import Loan
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Housing', 'Household']
+__all__ = ['MortgageBank', 'CreditBank', 'StudentLoanBank', 'Broker', 'Housing', 'Household']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -21,32 +24,69 @@ RETIREMENT = 65
 DEATH = 95
 
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
+_monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
+_monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
 
 
-class PrematureHouseholderError(Exception):
-    def __init__(self, age): super().__init__('{} < {}'.format(age, ADULTHOOD))
-class DeceasedHouseholderError(Exception):
-    def __init__(self, age): super().__init__('{} > {}'.format(age, DEATH))
+class PrematureHouseholderError(Exception): pass
+class DeceasedHouseholderError(Exception): pass
     
 
+class Bank(ntuple('bank', 'type name rate duration')):
+    stringformat = '{name}|{type}bank providing {rate}%/MO for {duration}-MOS' 
+    def __str__(self): return self.stringformat.format(**{'type':uppercase(self.type)}, name=self.name, rate=self.rate, duration=self.duration)        
+    def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))      
+    def __new__(cls, *args, basis='month', rate, duration, **kwargs): 
+        kwargs.update({'rates':_monthrate[basis](kwargs['rates']), 'duration':_monthduration[basis](kwargs['duration'])})
+        return super().__new__(cls, **kwargs)                   
+    
+    def loan(self, amount): return Loan(self.type, amount, self.rate, self.duration)
+
+    
+class CreditBank(Bank): 
+    def __new__(cls, *args, **kwargs): return super().__new__(cls, *args, **{'type':'credit'}, **kwargs)
+   
+    
+class StudentLoanBank(Bank): 
+    def __new__(cls, *args, **kwargs): return super().__new__(cls, *args, **{'type':'studentloan'}, **kwargs)
+    
+    
+class MortgageBank(Bank): 
+    def __new__(cls, *args, **kwargs): return super().__new__(cls, *args, **{'type':'mortgage'}, **kwargs)
+    def __init__(self, *args, financing, coverage, loantovalue, **kwargs): 
+        self.financing, self.coverage, self.loantovalue = financing, coverage, loantovalue
+
+    def qualify(self, coverage): return coverage >= self.coverage
+    def downpayment(self, value): return value * (1 - self.loantovalue)
+    def cost(self, amount): return amount * (1 + self.financing)
+
+
+class Broker(ntuple('Broker', 'commisions')): 
+    def cost(self, amount): return amount * (1 + self.commisions)
+
+
 class Household(ntuple('Household', 'age race origin language education children size')):
-    stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'   
+    __stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'       
+    __concepts = {} 
     def __str__(self): 
-        contents = dict(age=self.age, race=self.__concepts['race'][self.race], origin=self.__concepts['origin'][self.origin], language=self.__concepts['language'][self.language],
-                        education=self.__concepts['education'][self.education], children=self.__concepts['children'][self.children], size=self.size)
-        householdstr = self.stringformat.format(**contents)
+        contents = {field:self.__concepts[field][getattr(self, field)] if field in self.__concepts.keys() else getattr(self, field) for field in self._fields}
+        householdstr = self.__stringformat.format(**contents)
         financialstr = str(self.__financials)
         return '\n'.join([householdstr, financialstr])
     
-    def __init__(self, *args, financials, utility, date, concepts, **kwargs): 
-        self.__utility, self.__financials, self.__date = utility, financials, date    
-        self.__concepts = concepts
-    
+    @classmethod
+    def factory(cls, *args, **kwargs): 
+        cls.__concepts = kwargs.get('concepts', cls.__concepts)    
+        cls.__stringformat = kwargs.get('stringformat', cls.__stringformat)    
+             
     def __new__(cls, *args, age, **kwargs):
-        if age < ADULTHOOD: raise PrematureHouseholderError(age)
-        if age > ADULTHOOD: raise DeceasedHouseholderError(age)                   
-        return super().__new__(cls, age, [kwargs[field] for field in cls._fields])
-     
+        if age < ADULTHOOD: raise PrematureHouseholderError()
+        if age > ADULTHOOD: raise DeceasedHouseholderError()                   
+        return super().__new__(cls, age, [kwargs[field] for field in cls._fields])    
+    
+    def __init__(self, *args, financials, utility, date, **kwargs): 
+        self.__utility, self.__financials, self.__date = utility, financials, date            
+    
     def todict(self): return self._asdict()
     def __getitem__(self, key): return self.todict()[key]
         
@@ -78,11 +118,18 @@ class Household(ntuple('Household', 'age race origin language education children
     #    return self
     
 
-class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space community proximity quality')):  
-    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase' 
+class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space community proximity quality')):     
+    __stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase' 
+    __concepts = {}    
     def __str__(self): 
-        content = dict(unit=self.__concepts['unit'][self.unit], sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price)
-        return self.stringformat.format(**content)
+        unit = self.__concepts['unit'][self.unit] if 'unit' in self.__concepts.keys() else self.unit
+        content = dict(sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price)
+        return self.__stringformat.format(unit=unit, **content)
+    
+    @classmethod
+    def factory(cls, *args, **kwargs): 
+        cls.__concepts = kwargs.get('concepts', cls.__concepts)    
+        cls.__stringformat = kwargs.get('stringformat', cls.__stringformat)    
 
     __instances = {} 
     __count = 0
@@ -96,11 +143,10 @@ class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space co
             cls.__instances[hash(instance)] = instance
             return instance
         
-    def __init__(self, sqftprice, sqftrent,  *args, rentalrate, concepts, **kwargs):
+    def __init__(self, sqftprice, sqftrent,  *args, rentalrate, **kwargs):
         assert 0 < rentalrate < 1
         self.__sqftrent, self.__sqftprice = sqftrent, sqftprice
         self.__rentalrate, self.__ownerrate = rentalrate, property(lambda: 1 - self.__rentalrate)
-        self.__concepts = concepts
         
     def todict(self): return self._asdict()
     def __getitem__(self, key): return self.todict()[key]    

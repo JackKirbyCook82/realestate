@@ -15,10 +15,6 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-ADULTHOOD = 15
-RETIREMENT = 65
-DEATH = 95
-
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
 _monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
 _monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
@@ -26,7 +22,7 @@ _monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda d
 
 class PrematureHouseholderError(Exception): pass
 class DeceasedHouseholderError(Exception): pass
-    
+ 
 
 class Household(ntuple('Household', 'age race origin language education children size')):
     __stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'       
@@ -35,16 +31,18 @@ class Household(ntuple('Household', 'age race origin language education children
         contents = {field:self.__concepts[field][getattr(self, field)] if field in self.__concepts.keys() else getattr(self, field) for field in self._fields}
         return '\n'.join([self.__stringformat.format(**contents), str(self.__financials)])
     
+    __lifetime = {'adulthood':15, 'retirement':65, 'dealth':95}
     @classmethod
     def factory(cls, *args, **kwargs): 
         cls.__concepts = kwargs.get('concepts', cls.__concepts)    
         cls.__stringformat = kwargs.get('stringformat', cls.__stringformat)    
+        cls.__lifetime = {key:kwargs.get(key, value) for key, value in cls.__lifetime.items()}
 
     __instances = {} 
     __count = 0
     def __new__(cls, *args, age, **kwargs):
-        if age < ADULTHOOD: raise PrematureHouseholderError()
-        if age > ADULTHOOD: raise DeceasedHouseholderError()          
+        if age < cls.__lifetime['adulthood']: raise PrematureHouseholderError()
+        if age > cls.__lifetime['death']: raise DeceasedHouseholderError()          
         instance = super().__new__(cls, age, [kwargs[field] for field in cls._fields])
         if hash(instance) in cls.__instances: 
             cls.__instances[hash(instance)].count += 1
@@ -59,13 +57,6 @@ class Household(ntuple('Household', 'age race origin language education children
     def __getitem__(self, key): return self.todict()[key]
     def todict(self): return self._asdict()
     
-    @property
-    def household_lifetime(self): return [ADULTHOOD, DEATH]
-    @property
-    def population_lifetime(self): return [0, DEATH]
-    @property
-    def household_incometime(self): return [ADULTHOOD, RETIREMENT]    
-       
     #def current_period(self): return int((self.age * 12) - (ADULTHOOD * 12)) 
     #def income_periods(self): return int((DEATH * 12) - self.period)
     #def life_periods(self): return int((RETIREMENT * 12) - self.period)

@@ -23,8 +23,14 @@ __license__ = ""
 _yearrate =  {'year': lambda rate: float(rate), 'month': lambda rate: float(pow(rate + 1, 12) - 1)} 
 _monthrate = {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
 _monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
+
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 _curve = lambda x, y, z: interp1d(x, y, kind='linear', bounds_error=False, fill_value=(y[np.argmin(x)], z)) 
+
+_payment = lambda x, r, n: x * (r * pow(1 + r, n)) / (pow(1 + r, n) - 1)
+_balance = lambda x, r, n: x * (pow(1 + r, n) - pow(1 + r, n)) / (pow(1 + r, n) - 1)  
+_downpayment = lambda x, ltv: x * (1 - ltv)
+_financingcost = lambda x, r: x * (1 + r)
 
 
 class Economy(object): 
@@ -55,18 +61,16 @@ class Loan(ntuple('Loan', 'name balance rate duration')):
     def __hash__(self): return hash((self.__class__.__name__, self.name, self.balance, self.rate, self.duration,))       
     def __new__(cls, *args, name, balance, rate, duration, basis='month', **kwargs): return super().__new__(cls, name, balance, _monthrate[basis](rate), _monthduration[basis](duration))   
     
-#    @property
-#    def payment(self): return (self.balance * self.rate * pow(1 + self.rate, self.duration))/(pow(1 + self.rate, self.duration) - 1)
+    @property
+    def payment(self): return _payment(self.balance, self.rate, self.duration)
     @property
     def interest(self): return self.balance * self.rate
     @property
     def principal(self): return self.payment - self.interest
     
+    def projection(self, duration): return self.__class__(self.name, _balance(self.balance, self.rate, self.duration), self.rate, max(self.duration - duration, 0))
     def payoff(self): return self.projection(self.duration)
-#    def projection(self, duration): 
-#        balance = self.balance * (pow(1 + self.rate, self.duration) - pow(1 + self.rate, min(duration, self.duration))) / (pow(1 + self.rate, self.duration) - 1)
-#        return self.__class__(self.name, balance, self.rate, max(self.duration - duration, 0))
-  
+    
     
 class Broker(ntuple('Broker', 'commisions')): 
     def cost(self, amount): return amount * (1 + self.commisions)    
@@ -94,8 +98,8 @@ class MortgageBank(Bank):
     def __init__(self, *args, financing, coverage, loantovalue, **kwargs): self.financing, self.coverage, self.loantovalue = financing, coverage, loantovalue
 
     def qualify(self, coverage): return coverage >= self.coverage
-    def downpayment(self, value): return value * (1 - self.loantovalue)
-    def cost(self, amount): return amount * (1 + self.financing)
+    def downpayment(self, value): return _downpayment(value, self.loantovalue)
+    def cost(self, amount): return _financingcost(amount, self.financing)
 
 
 

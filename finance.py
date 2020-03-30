@@ -6,7 +6,6 @@ Created on Sun Feb 23 2020
 
 """
 
-import numpy as np
 from collections import namedtuple as ntuple
 
 __version__ = "1.0.0"
@@ -20,13 +19,13 @@ _monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambd
 _monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
 _monthflow = {'year': lambda flow: int(flow / 12), 'month': lambda flow: int(flow)}
 
-def theta(risktolerance, discountrate, wealthrate): return (wealthrate - discountrate) / risktolerance   
-#def income_compounding(duration, incomerate, wealthrate): return np.array([pow(1 + incomerate, i) * pow(1 + wealthrate, i) for i in range(1, duration + 1, 1)])
-#def consumption_compounding(duration, discountrate, risktolerance, wealthrate): return np.array([pow(1 + theta(risktolerance, discountrate, wealthrate), i) * pow(1 + wealthrate, i) for i in range(1, duration + 1, 1)])    
-#def income_integral(duration, incomerate, wealthrate): pass 
-#def consumption_integral(duration, discountrate, risktolerance, wealthrate): pass
-#def loanpayment_integral(duration, loanrate, wealthrate): pass
-
+theta = lambda risktolerance, discountrate, wealthrate: (wealthrate - discountrate) / risktolerance
+wealth_factor = lambda wr, n: pow(1 + wr, n)
+value_factor = lambda ar, n: pow(1 + ar, n)
+income_factor = lambda ir, wr, n: pow(1 + ir, n) / (ir - wr)
+consumption_factor = lambda tr, wr, n: pow(1 + tr, n) / (tr - wr)
+loan_factor = lambda lr, wr, n: (lr / wr) * (pow(1 + lr, n) / (1 - pow(1 + lr, n)))
+  
 
 class InsufficientFundsError(Exception): pass
 class InsufficientCoverageError(Exception): pass
@@ -38,26 +37,54 @@ class Financials(ntuple('Financials', 'discountrate risktolerance income wealth 
     stringformat = 'Financials|Assets=${assets:.0f}, Debt=${debt:.0f}, Income=${income:.0f}/MO'
     def __str__(self): return self.stringformat(assets=self.wealth + self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance)     
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([field, repr(self[field])]) for field in self._fields]))  
-    def __hash__(self): return hash((self.__class__.__name__, self.discountrate, self.risktolerance, self.income, self.wealth, self.value, self.consumption, hash(self.mortgage), hash(self.studentloan), hash(self.debt),))    
+    def __hash__(self): return hash((self.__class__.__name__, self.__horizonduration, self.discountrate, self.risktolerance, self.income, self.wealth, self.value, self.consumption, hash(self.mortgage), hash(self.studentloan), hash(self.debt),))    
 
+    def __init__(self, horizonduration, *args, **kwargs): self.__horizonduration = horizonduration
     def __new__(cls, *args, basis='month', **kwargs):        
         kwargs.update({'discountrate':_monthrate(kwargs['discountrate']), 'income':_monthflow(kwargs['income'])})
-        consumption = cls.__consumption(*args, **kwargs)       
+        consumption = cls.__consumption(*args, **kwargs)    
         return super().__new__(cls, consumption=consumption, **kwargs)     
 
     @classmethod
-    def __consumption(cls, lifeduration, incomeduration, *args, discountrate, risktolerance, income, wealth, value, mortgage, studentloan, debt, wealthrate, incomerate, valuerate, basis='month', **kwargs):
-        wealthrate, incomerate, valuerate = [_monthrate[basis](rate) for rate in (wealthrate, incomerate, valuerate)]
-#       
-        i = income_integral(min(lifeduration, incomeduration), incomerate, wealthrate) 
-        c = consumption_integral(lifeduration, discountrate, risktolerance, wealthrate)    
-        m = loanpayment_integral(min(lifeduration, mortgage.duration), mortgage.rate, wealthrate)  
-        s = loanpayment_integral(min(lifeduration, studentloan.duration), studentloan.rate, wealthrate)  
-        d = loanpayment_integral(min(lifeduration, debt.duration), debt.rate, wealthrate)         
-#             
+    def __consumption(cls, horizonduration, incomeduration, *args, terminalwealth=0, discountrate, risktolerance, income, wealth, value, basis='month', **kwargs):
+        horizonduration, incomeduration = [_monthduration[basis](kwargs[rate]) for rate in (horizonduration, incomeduration)]   
+        wealthrate, incomerate, valuerate = [_monthrate[basis](kwargs[rate]) for rate in ('wealthrate', 'incomerate', 'valuerate')]      
+        mortgage, studentloan, debt = [kwargs.get(loan, None) for loan in ('mortgage', 'studentloan', 'debt')]
+        w = wealth_factor(wealthrate, horizonduration)
+        a = value_factor(valuerate, horizonduration)
+        i = income_factor(incomerate, wealthrate, incomeduration)
+        c = consumption_factor(theta(risktolerance, discountrate, wealthrate), wealthrate, horizonduration)
+        m = loan_factor(mortgage.rate, wealthrate, min(horizonduration, mortgage.duration)) if mortgage is not None else 0
+        s = loan_factor(studentloan.rate, wealthrate, min(horizonduration, studentloan.duration)) if studentloan is not None else 0
+        d = loan_factor(debt.rate, wealthrate, min(horizonduration, debt.duration)) if debt is not None else 0
+        consumption = (w * wealth + a * value + i * income - m * mortgage.balance - s * studentloan.balance - d * debt.balance - terminalwealth) / c
         if consumption < 0: raise UnstableLifeStyleError()   
         else: return int(consumption)    
-             
+     
+    def __wealth(self, duration, incomeduration, *args, basis='month', **kwargs):
+        if duration > self.__horizonduration: raise ExceededHorizonError()
+        duration, incomeduration = [_monthduration[basis](kwargs[rate]) for rate in (duration, incomeduration)]   
+        wealthrate, incomerate, valuerate = [_monthrate[basis](kwargs[rate]) for rate in ('wealthrate', 'incomerate', 'valuerate')]              
+        w = wealth_factor(wealthrate, duration)        
+        i = income_factor(incomerate, wealthrate, incomeduration)
+        c = consumption_factor(theta(self.risktolerance, self.discountrate, wealthrate), wealthrate, duration)
+        m = loan_factor(self.mortgage.rate, wealthrate, min(duration, self.mortgage.duration)) if self.mortgage is not None else 0
+        s = loan_factor(self.studentloan.rate, wealthrate, min(duration, self.studentloan.duration)) if self.studentloan is not None else 0
+        d = loan_factor(self.debt.rate, wealthrate, min(duration, self.debt.duration)) if self.debt is not None else 0    
+        return w * self.wealth + i * self.income - c * self.consumption - m * self.mortgage.balance - s * self.studentloan.balance - d * self.debt.balance
+    
+    def __value(self, duration, *args, valuerate, basis='month', **kwargs):
+        if duration > self.__horizonduration: raise ExceededHorizonError()
+        duration = _monthduration[basis](kwargs[duration])
+        valuerate = _monthrate[basis](kwargs[valuerate])   
+        a = value_factor(valuerate, duration)
+        return a * self.value 
+    
+    def __totalwealth(self, *args, **kwargs): 
+        wealth = self.__wealth(*args, **kwargs)
+        value = self.__value(*args, **kwargs)
+        return wealth + value
+    
     @property
     def rates(self): return dict(discountrate=self.discountrate, risktolerance=self.risktolerance)
     @property
@@ -88,21 +115,19 @@ class Financials(ntuple('Financials', 'discountrate risktolerance income wealth 
         if not bank.qualify(newfinancials.coverage): raise InsufficientCoverageError()
         return newfinancials
     
-#    def projection(self, duration, *args, wealthrate, incomerate, valuerate, basis='month', **kwargs):  
-#        duration = _monthduration[basis](duration)
-#        wealthrate, incomerate, valuerate = [_monthrate[basis](rate) for rate in (wealthrate, incomerate, valuerate)]
-#        income = self.income * income_compounding(min(duration, self.__incomehorizon), incomerate=incomerate, wealthrate=wealthrate)
-#        consumption = self.consumption * consumption_compounding(duration, discountrate=self.discountrate, risktolerance=self.risktolerance, wealthrate=wealthrate)        
-#        newwealth = self.wealth * pow(1 + wealthrate, duration) + income - consumption
-#        newincome = self.income * pow(1 + incomerate, duration)
-#        newvalue = self.value * pow(1 + valuerate, duration)
-#        newmortgage = self.mortgage.projection(duration, *args, **kwargs) 
-#        newstudentloan = self.studentloan.projection(duration, *args, **kwargs)
-#        newdebt = self.debt.projection(duration, *args, **kwargs)
-#        loans = dict(mortgage=newmortgage, studentloan=newstudentloan, debt=newdebt)
-#        assets = dict(income=newincome, wealth=newwealth, value=newvalue)
-#        newfinancials = self.__class__(**assets, **self.rates, **loans)  
-#        return newfinancials
+    def projection(self, duration, incomeduration, *args, basis='month', **kwargs):  
+        newwealth = self.__wealth(duration, incomeduration, *args, basis=basis, **kwargs)
+        newvalue = self.__value(duration, *args, basis=basis, **kwargs)       
+        duration, incomeduration = [_monthduration[basis](kwargs[rate]) for rate in (duration, incomeduration)]   
+        wealthrate, incomerate, valuerate = [_monthrate[basis](kwargs[rate]) for rate in ('wealthrate', 'incomerate', 'valuerate')]   
+        newincome = self.income * pow(1 + incomerate, duration)
+        newmortgage = self.mortgage.projection(duration, *args, **kwargs) 
+        newstudentloan = self.studentloan.projection(duration, *args, **kwargs)
+        newdebt = self.debt.projection(duration, *args, **kwargs)
+        loans = dict(mortgage=newmortgage, studentloan=newstudentloan, debt=newdebt)
+        assets = dict(income=newincome, wealth=newwealth, value=newvalue)
+        newfinancials = self.__class__(**assets, **self.rates, **loans)  
+        return newfinancials
 
 
 

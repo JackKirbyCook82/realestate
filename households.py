@@ -31,18 +31,18 @@ class Household(ntuple('Household', 'age race origin language education children
         contents = {field:self.__concepts[field][getattr(self, field)] if field in self.__concepts.keys() else getattr(self, field) for field in self._fields}
         return '\n'.join([self.__stringformat.format(**contents), str(self.__financials)])
     
-    __lifetime = {'adulthood':15, 'retirement':65, 'dealth':95}
+    __ages = {'adulthood':15, 'retirement':65, 'dealth':95}
     @classmethod
     def factory(cls, *args, **kwargs): 
         cls.__concepts = kwargs.get('concepts', cls.__concepts)    
         cls.__stringformat = kwargs.get('stringformat', cls.__stringformat)    
-        cls.__lifetime = {key:kwargs.get(key, value) for key, value in cls.__lifetime.items()}
+        cls.__ages = {key:kwargs.get(key, value) for key, value in cls.__ages.items()}
 
     __instances = {} 
     __count = 0
     def __new__(cls, *args, age, **kwargs):
-        if age < cls.__lifetime['adulthood']: raise PrematureHouseholderError()
-        if age > cls.__lifetime['death']: raise DeceasedHouseholderError()          
+        if age < cls.__ages['adulthood']: raise PrematureHouseholderError()
+        if age > cls.__ages['death']: raise DeceasedHouseholderError()          
         instance = super().__new__(cls, age, [kwargs[field] for field in cls._fields])
         if hash(instance) in cls.__instances: 
             cls.__instances[hash(instance)].count += 1
@@ -56,33 +56,7 @@ class Household(ntuple('Household', 'age race origin language education children
     def __hash__(self): return hash((self.__class__.__name__, self.age, self.race, self.origin, self.language, self.education, self.children, self.size, hash(self.__utility), hash(self.__financials),))
     def __getitem__(self, key): return self.todict()[key]
     def todict(self): return self._asdict()
-    
-    #def current_period(self): return int((self.age * 12) - (ADULTHOOD * 12)) 
-    #def income_periods(self): return int((DEATH * 12) - self.period)
-    #def life_periods(self): return int((RETIREMENT * 12) - self.period)
-    #def horizon_age(self, horizon_years): return min(self.age + horizon_years, DEATH)
-    #def horizon_period(self, horizon_age): return int((horizon_age * 12) - self.period) 
-            
-    #def utility(self, housing, tenure, horizon, wealth_multiple, *args, economy, **kwargs):
-    #    horizon_periods, income_periods = self.horizon_period(self.horizon_age(horizon)), self.income_periods()
-    #    if tenure == 'renter': financials, cost = self.__financials.sale(*args, **kwargs), housing.rentercost
-    #    elif tenure == 'owner': financials, cost = self.__financials.buy(housing.price, *args, **kwargs), housing.ownercost
-    #    total_consumption = self.__financials.consumption(horizon_periods, income_periods, wealth_multiple, *args, economy=economy, **kwargs)
-    #    housing_consumption = financials + cost        
-    #    economic_consumption = total_consumption - housing_consumption
-    #    return self.__utility(self, *args, consumption=economic_consumption/economy.price, **housing.todict(), date=self.__date, **kwargs)
-    
-    #def __call__(self, duration_months, *args, **kwargs): 
-    #    self.__date = self.__date.add(months=duration_months)
-    #    self.__financials = self.__financials(duration_months, *args, **kwargs)
-    #    return self
-    
-    
-    
-    
-    
-    
-    
+
     
     
     

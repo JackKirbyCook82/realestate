@@ -9,11 +9,11 @@ Created on Sun Feb 23 2020
 import numpy as np
 
 from utilities.utility import UtilityIndex, CobbDouglas_UtilityFunction
-from utilities.dictionarys import CallSliceOrderedDict as registry
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['UTILITY_INDEXES', 'UTILITY_FUNCTIONS']
+__all__ = ['Consumption_UtilityIndex', 'Crime_UtilityIndex', 'School_UtilityIndex', 'Quality_UtilityIndex', 'Space_UtilityIndex', 'Proximity_UtilityIndex', 'Community_UtilityIndex',
+           'CobbDouglas_UtilityFunction']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -23,16 +23,6 @@ MINACT, MAXACT = 1, 36
 MINST, MAXST = 1, 100
 MINCOMMUTE, MAXCOMMUTE = 0, 120
 
-CONSUMPTION = {'consumption':1}
-CRIMES = {'shooting':3, 'arson':3, 'burglary':3, 'assault':2, 'vandalism':2, 'robbery':2, 'arrest':1, 'other':1, 'theft':1}
-SCHOOLS = {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'stratio':1, 'exp':1}
-QUALITY = {'age':1}
-SPACE =  {'bed/ppl':3, 'sqft/ppl':2, 'sqft':1, 'sqft/bedroom':3}
-PROXIMITY = {'avgcommute':1, 'midcommute':1, 'stdcommute':1}
-COMMUNITY = {'race':3, 'age':2, 'children':2, 'origin':4, 'education':1, 'language':3}
-
-UTILITY_INDEXES = registry()
-UTILITY_FUNCTIONS = {'housing': CobbDouglas_UtilityFunction}
 
 _flatten = lambda nesteditems: [item for items in nesteditems for item in items]
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
@@ -47,24 +37,19 @@ def average_records_generator(*records):
     for key in keys: yield key, np.mean(_filterempty([record.get(key, None) for record in records]))
 
 
-@UTILITY_INDEXES('consumption')
-@UtilityIndex.create('logarithm', CONSUMPTION)
+@UtilityIndex.create('logarithm', {'consumption':1})
 class Consumption_UtilityIndex: 
     def execute(self, household, *args, consumption, **kwargs): 
         return {'consumption':consumption}
 
-
-@UTILITY_INDEXES('crime')
-@UtilityIndex.create('inverted', CRIMES)
+@UtilityIndex.create('inverted', {'shooting':3, 'arson':3, 'burglary':3, 'assault':2, 'vandalism':2, 'robbery':2, 'arrest':1, 'other':1, 'theft':1})
 class Crime_UtilityIndex: 
     def execute(self, household, *args, crimes, **kwargs):
         crime = {key:value for key, value in average_records_generator(*crimes.values())}
         return {'shooting':crime.shooting, 'arson':crime.arson, 'burglary':crime.burglary, 'assault':crime.assault,'vandalism':crime.vandalism, 
                 'robbery':crime.robbery, 'arrest':crime.arrest, 'other':crime.other, 'theft':crime.theft}
 
-
-@UTILITY_INDEXES('school')
-@UtilityIndex.create('tangent', SCHOOLS)
+@UtilityIndex.create('tangent', {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'stratio':1, 'exp':1})
 class School_UtilityIndex: 
     def execute(self, household, *args, schools, **kwargs): 
         school = {key:value for key, value in average_records_generator(*schools.values())}
@@ -72,32 +57,24 @@ class School_UtilityIndex:
                 'ap':school.ap_enrollment, 'st':_percent(school.student_density, MINST, MAXST), 'exp':_antipercent(school.inexperience_ratio),
                 'sat':_percent(school.avgsat_score, MINSAT, MAXSAT), 'act':_percent(school.avgact_score, MINACT, MAXACT)} 
 
-
-@UTILITY_INDEXES('quality')
-@UtilityIndex.create('inverted', QUALITY)
+@UtilityIndex.create('inverted', {'age':1})
 class Quality_UtilityIndex: 
     def execute(self, household, *args, quality, date, **kwargs): 
         return {'age':date.year - quality.yearbuilt + 1}
 
-
-@UTILITY_INDEXES('space')
-@UtilityIndex.create('logarithm', SPACE)
+@UtilityIndex.create('logarithm', {'bed/ppl':3, 'sqft/ppl':2, 'sqft':1, 'sqft/bedroom':3})
 class Space_UtilityIndex: 
     def execute(self, household, *args, space, **kwargs): 
         return {'bed/ppl':max(space.bedrooms/household.size, 1), 'sqft/ppl':space.sqft/household.size, 'sqft':space.sqft,
                 'sqft/bedroom':space.sqft * (1-(space.bedrooms/space.rooms)) / space.bedrooms}
 
-
-@UTILITY_INDEXES('proximity')
-@UtilityIndex.create('inverted', PROXIMITY)
+@UtilityIndex.create('inverted', {'avgcommute':1, 'midcommute':1, 'stdcommute':1})
 class Proximity_UtilityIndex: 
     def execute(self, household, *args, proximity, **kwargs): 
         return {'avgcommute':proximity.commute.mean(bounds=[MINCOMMUTE, MAXCOMMUTE]), 'midcommute':proximity.commute.median(bounds=[MINCOMMUTE, MAXCOMMUTE]), 
                 'stdcommute':proximity.commute.mean(bounds=[MINCOMMUTE, MAXCOMMUTE]) + proximity.commute.std(bounds=[MINCOMMUTE, MAXCOMMUTE])}
 
-
-@UTILITY_INDEXES('community')
-@UtilityIndex.create('tangent', COMMUNITY)
+@UtilityIndex.create('tangent', {'race':3, 'age':2, 'children':2, 'origin':4, 'education':1, 'language':3})
 class Community_UtilityIndex: 
     def execute(self, household, *args, community, **kwargs): 
         category_percent = lambda attr: community[attr][household[attr]]/community[attr].total()     

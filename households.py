@@ -8,6 +8,9 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
+from realestate.finance import Financials
+from realestate.finance import Utility
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ['Household']
@@ -33,7 +36,7 @@ class Household(ntuple('Household', 'age race origin language education children
     
     __ages = {'adulthood':15, 'retirement':65, 'dealth':95}
     @classmethod
-    def factory(cls, *args, **kwargs): 
+    def setup(cls, *args, **kwargs): 
         cls.__concepts = kwargs.get('concepts', cls.__concepts)    
         cls.__stringformat = kwargs.get('stringformat', cls.__stringformat)    
         cls.__ages = {key:kwargs.get(key, value) for key, value in cls.__ages.items()}
@@ -57,6 +60,21 @@ class Household(ntuple('Household', 'age race origin language education children
     def __getitem__(self, key): return self.todict()[key]
     def todict(self): return self._asdict()
 
+    @classmethod
+    def create(cls, year, *args, age, education, race, origin, language, children, size, **kwargs):
+        financials = Financials.create(*args, age=age, education=education, ages=cls.__ages, **kwargs)
+        utility = Utility.create(*args, **kwargs)
+        return cls(age=age, race=race, origin=origin, language=language, education=education, children=children, size=size, financials=financials, utility=utility)
+
+        
+    
+    
+    
+    
+    
+    
+    
+    
     
     
     

@@ -37,26 +37,25 @@ _financingcost = lambda x, r: x * (1 + r)
 
 class Economy(object): 
     @keydispatcher
-    def __createcurve(self, projection, years, values, *args, **kwargs): raise KeyError(projection)
+    def __createcurve(self, projection, years, rates, *args, **kwargs): raise KeyError(projection)
     @__createcurve.register('average')
-    def __average(self, years, values, *args, weights=None, **kwargs): return _curve(years, values, np.average(values, weights=_normalize(weights) if weights else None))
+    def __average(self, years, rates, *args, weights=None, **kwargs): return _curve(years, rates, np.average(rates, weights=_normalize(weights) if weights else None))
     @__createcurve.register('last')
-    def __last(self, years, values, *args, **kwargs): return _curve(years, values, values[np.argmax(values)])
+    def __last(self, years, rates, *args, **kwargs): return _curve(years, rates, rates[np.argmax(rates)])
     
-    def __new__(cls, years, *args, **kwargs):
-        assert isinstance(years, np.ndarray)
-        for rates, rate in zip(('wealthrates', 'incomerates', 'valuerates'), ('wealthrate', 'incomerate', 'valuerate')): 
-            if rates in kwargs.keys(): assert isinstance(kwargs[rates], np.ndarray) and len(years) == len(kwargs[rates])
-            elif rate in kwargs.keys(): assert isinstance(kwargs[rate], Number)
-            else: raise TypeError()
-        return super().__new__(cls)
+    def __getcurve(self, years, rates, projection, basis):        
+        if isinstance(years, np.ndarray) and isinstance(rates, np.ndarray):
+            assert len(years) == len(rates)    
+            return self.__createcurve(projection, years, np.vectorize(lambda x: _yearrate[basis](x))(rates))
+        elif isinstance(years, Number) and isinstance(rates, Number):
+            return self.__createcurve(projection, np.array([years-1, years, years+1]), np.fill(3, _yearrate[basis](rates))) 
+        else: raise TypeError(type(years), type(rates))
         
-    def __init__(self, years, *args, projection, basis='year', **kwargs):    
-        years = np.vectorize(lambda x: int(x))(years)
-        ratefunction = lambda rates, rate: np.vectorize(lambda x: _yearrate[basis](x))(kwargs[rates]) if rates in kwargs.keys() else np.full(len(years), int(kwargs[rate]))        
-        self.__wealthcurve = self.__createcurve(projection, years, ratefunction('wealthrates', 'wealthrate'), *args, **kwargs)
-        self.__incomecurve = self.__createcurve(projection, years, ratefunction('incomerates', 'incomerate'), *args, **kwargs)
-        self.__valuecurve = self.__createcurve(projection, years, ratefunction('valuerates', 'valuerate'), *args, **kwargs)
+    def __init__(self, *args, wealth, income, value, rent, projection, basis='year', **kwargs):    
+        self.__wealthcurve = self.getcurve(*wealth, projection, basis) 
+        self.__incomecurve = self.getcurve(*income, projection, basis) 
+        self.__valuecurve = self.getcurve(*value, projection, basis) 
+        self.__rentcurve = self.getcurve(*rent, projection, basis) 
         
     def wealthrate(self, year, *args, basis='month', **kwargs): return _monthrate[basis](self.__wealthcurve(year))
     def incomerate(self, year, *args, basis='month', **kwargs): return _monthrate[basis](self.__incomecurve(year))

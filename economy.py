@@ -7,7 +7,7 @@ Created on Sun Feb 23 2020
 """
 
 import numpy as np
-from number import Number
+from numbers import Number
 from scipy.interpolate import interp1d
 from collections import namedtuple as ntuple
 
@@ -51,11 +51,12 @@ class Economy(object):
             return self.__createcurve(projection, np.array([years-1, years]), np.fill(2, _yearrate[basis](rates))) 
         else: raise TypeError(type(years), type(rates))
         
-    def __init__(self, *args, wealth, income, value, rent, projection, basis='year', **kwargs):    
-        self.__wealthcurve = self.getcurve(*wealth, projection, basis) 
-        self.__incomecurve = self.getcurve(*income, projection, basis) 
-        self.__valuecurve = self.getcurve(*value, projection, basis) 
-        self.__rentcurve = self.getcurve(*rent, projection, basis) 
+    def __init__(self, *args, rates, projection, basis='year', **kwargs):    
+        assert isinstance(rates, dict)
+        self.__wealthcurve = self.getcurve(*rates['wealth'], projection, basis) 
+        self.__incomecurve = self.getcurve(*rates['income'], projection, basis) 
+        self.__valuecurve = self.getcurve(*rates['value'], projection, basis) 
+        self.__rentcurve = self.getcurve(*rates['rent'], projection, basis) 
         
     def wealthrate(self, year, *args, basis='month', **kwargs): return _monthrate[basis](self.__wealthcurve(year))
     def incomerate(self, year, *args, basis='month', **kwargs): return _monthrate[basis](self.__incomecurve(year))

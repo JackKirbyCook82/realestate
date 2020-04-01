@@ -26,11 +26,12 @@ geography = Geography(dict(state=6, county=29, tract='*'))
 history = [Date(year=item) for item in range(2010, 2018 + 1)]
 date = Date(year=2018)                           
       
-rate_history = Rate_History(dates=history) 
-household_montecarlo = Households_MonteCarlo(date=date)
-housing_montecarlo = Housing_MonteCarlo(date=date)                  
+rate_history = Rate_History(dates=history, geography=geography) 
+household_montecarlo = Households_MonteCarlo(date=date, geography=geography)
+housing_montecarlo = Housing_MonteCarlo(date=date, geography=geography)                  
 
-economy = Economy(wealth=(date.year, 0.03), **rate_history(geography=geography), projection='average', basis='year')
+rates = dict(wealth=(date.year, 0.03), **rate_history(geography=geography))
+economy = Economy(rates=rates, projection='average', basis='year')
 broker = Broker(name='ReMax', commisions=0.03)
 
 mortgage_bank = Bank('mortgage', name='Chase', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')

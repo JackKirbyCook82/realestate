@@ -9,7 +9,7 @@ Created on Tues Mar 31 2020
 import numpy as np
 
 from tables.transformations import Reduction
-from uscensus.calculations import calculations, renderer
+from uscensus.calculations import process, renderer
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -23,12 +23,12 @@ _filterempty = lambda items: [item for item in _aslist(items) if item is not Non
 
 WEIGHT_TABLES = {'income':'#hh|geo', 'value':'#hh|geo@owner', 'rent':'#hh|geo@renter'}
 RATE_TABLES = {'income':'Δ%avginc|geo', 'value':'Δ%avgval|geo@owner', 'rent':'Δ%avgrent|geo@rent'}
-FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'rent':'#hh|geo|~rent'}
 HOUSING_TABLES = {}
+FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'rent':'#hh|geo|~rent'}
 HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'yearoccupied':'#st|geo|~yrocc', 'size':'#hh|geo|~size', 'children':'#hh|geo|child', 
                     'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race', 'origin':'#pop|geo|origin'}
-
-calculations()
+                 
+calculations = process()
 summation = Reduction(how='summation', by='summation') 
 average = Reduction(how='wtaverage', by='summation')
 
@@ -51,21 +51,26 @@ class Rate_History(object):
 
 
 class MonteCarlo(object):
+    __instances = {}
+    def __new__(cls, *args, geography, date, **kwargs):
+        key = hash((cls.__name__, hash(date), hash(geography),))
+        instance = cls.__instances.get(key, super().__new__(cls))
+        if key not in cls.__instances.keys(): cls.__instances[key] = instance
+        return instance
+
     def __init__(self, tables, *args, **kwargs):
-        self.__tables = tables
+        self.__tables = {key:gettable(tableID, *args, **kwargs) for key, tableID in self.tableIDs.items()}
+        
+    def create(cls, **tableIDs):
+        def wrapper(subclass): return type(subclass.__name__, (cls, subclass), {'tableIDs':tableIDs})
+        return wrapper
 
 
-class Households_MonteCarlo(MonteCarlo):
-    def __init__(self, *args, **kwargs):
-        super().__init__({key:gettable(tableID, *args, **kwargs) for key, tableID in HOUSEHOLD_TABLES.items()}, *args, **kwargs)
+@MonteCarlo.create(**FINANCE_TABLES, **HOUSEHOLD_TABLES)
+class Households_MonteCarlo(MonteCarlo): pass
 
-
-class Housing_MonteCarlo(MonteCarlo):
-    def __init__(self, *args, **kwargs):
-        super().__init__({key:gettable(tableID, *args, **kwargs) for key, tableID in HOUSING_TABLES.items()}, *args, **kwargs)
-
-
-              
+@MonteCarlo.create(**HOUSING_TABLES)
+class Housing_MonteCarlo(MonteCarlo): pass
 
 
 

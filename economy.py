@@ -48,7 +48,7 @@ class Economy(object):
             assert len(years) == len(rates)    
             return self.__createcurve(projection, years, np.vectorize(lambda x: _yearrate[basis](x))(rates))
         elif isinstance(years, Number) and isinstance(rates, Number):
-            return self.__createcurve(projection, np.array([years-1, years, years+1]), np.fill(3, _yearrate[basis](rates))) 
+            return self.__createcurve(projection, np.array([years-1, years]), np.fill(2, _yearrate[basis](rates))) 
         else: raise TypeError(type(years), type(rates))
         
     def __init__(self, *args, wealth, income, value, rent, projection, basis='year', **kwargs):    

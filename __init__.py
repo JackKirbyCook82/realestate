@@ -11,7 +11,6 @@ from variables import Geography, Date
 
 from realestate.feed import Rate_History, Households_MonteCarlo, Housing_MonteCarlo
 from realestate.economy import School, Bank, Broker, Economy
-from realestate.households import Household
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"

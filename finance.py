@@ -131,30 +131,30 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
         newfinancials = self.__class__(**assets, **self.rates, **loans)  
         return newfinancials
 
-    @classmethod
-    def create(cls, year, *args, discountrate, risktolerance, age, education, value, yearoccupied, income, ages, schools, economy, banks, **kwargs):
-        start_school = schools[education]
-        start_age = ages['adulthood'] + start_school.duration     
-        start_year = year - age - start_school.duration    
-        start_income = income / np.prod(np.array([1 + economy.incomerate(i, basis='year') for i in range(start_year, year)]))
-        start_studentloan = banks['studentloan'].loan(start_school.cost)   
-        assert start_age <= age and start_year <= year
-        
-        purchase_age = age - year - yearoccupied
-        purchase_year = yearoccupied    
-        purchase_value = value / np.prod(np.array([1 + economy.valuerate(i, basis='year') for i in range(purchase_year, year)]))            
-        purchase_downpayment = banks['mortgage'].downpayment(purchase_value)
-        purchase_cost = banks['mortgage'].cost(purchase_value - purchase_downpayment)
-        purchase_cash = purchase_downpayment - purchase_cost    
-        assert start_year <= purchase_year <= year and start_age <= purchase_age <= age
-        
-        targets = {purchase_age - start_age:purchase_cash}
-        financials = cls(max(ages['death'] - start_age, 0), max(ages['retirement'] - start_age, 0), targets=targets, terminalwealth=0, discountrate=discountrate, risktolerance=risktolerance, 
-                         income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, **economy.rates(year, basis='year'), basis='year')
-        financials = financials.projection(max(purchase_age - start_age, 0), **economy.rates(year, basis='year'), basis='year')
-        financials = financials.buy(purchase_value, bank=banks['mortgage'])
-        financials = financials.projection(max(age - purchase_age, 0), **economy.rates(year, basis='year'), basis='year')    
-        return financials
+#    @classmethod
+#    def create(cls, year, *args, discountrate, risktolerance, age, education, value, yearoccupied, income, ages, schools, economy, banks, **kwargs):
+#        start_school = schools[education]
+#        start_age = ages['adulthood'] + start_school.duration     
+#        start_year = year - age - start_school.duration    
+#        start_income = income / np.prod(np.array([1 + economy.incomerate(i, basis='year') for i in range(start_year, year)]))
+#        start_studentloan = banks['studentloan'].loan(start_school.cost)   
+#        assert start_age <= age and start_year <= year
+#        
+#        purchase_age = age - year - yearoccupied
+#        purchase_year = yearoccupied    
+#        purchase_value = value / np.prod(np.array([1 + economy.valuerate(i, basis='year') for i in range(purchase_year, year)]))            
+#        purchase_downpayment = banks['mortgage'].downpayment(purchase_value)
+#        purchase_cost = banks['mortgage'].cost(purchase_value - purchase_downpayment)
+#        purchase_cash = purchase_downpayment - purchase_cost    
+#        assert start_year <= purchase_year <= year and start_age <= purchase_age <= age
+#        
+#        targets = {purchase_age - start_age:purchase_cash}
+#        financials = cls(max(ages['death'] - start_age, 0), max(ages['retirement'] - start_age, 0), targets=targets, terminalwealth=0, discountrate=discountrate, risktolerance=risktolerance, 
+#                         income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, **economy.rates(year, basis='year'), basis='year')
+#        financials = financials.projection(max(purchase_age - start_age, 0), **economy.rates(year, basis='year'), basis='year')
+#        financials = financials.buy(purchase_value, bank=banks['mortgage'])
+#        financials = financials.projection(max(age - purchase_age, 0), **economy.rates(year, basis='year'), basis='year')    
+#        return financials
 
 
 

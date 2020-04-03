@@ -7,99 +7,88 @@ Created on Tues Mar 31 2020
 """
 
 import numpy as np
-from scipy.linalg import cholesky, eigh
-from collections import OrderedDict as ODict
-from collections import namedtuple as ntuple
+from scipy.interpolate import interp1d
 
-from tables.transformations import Reduction
+from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 from uscensus.calculations import process, renderer
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Rate_History', 'Households_MonteCarlo', 'Housing_MonteCarlo']
+__all__ = ['FinanceFeed', 'HouseholdFeed', 'HousingFeed', 'RateFeed']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
 _filterempty = lambda items: [item for item in _aslist(items) if item is not None]
+_yearrate =  {'year': lambda rate: float(rate), 'month': lambda rate: float(pow(rate + 1, 12) - 1)} 
+_monthrate = {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
+_normalize = lambda items: np.array(items) / np.sum(np.array(items))
+_curve = lambda x, y, z: interp1d(x, y, kind='linear', bounds_error=False, fill_value=(y[np.argmin(x)], z)) 
 
-WEIGHT_TABLES = {'income':'#hh|geo', 'value':'#hh|geo@owner', 'rent':'#hh|geo@renter'}
-RATE_TABLES = {'income':'Δ%avginc|geo', 'value':'Δ%avgval|geo@owner', 'rent':'Δ%avgrent|geo@rent'}
-HOUSING_TABLES = {}
+RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgrent@renter'}
+HOUSING_TABLES = {'yearoccupied':'#st|geo|yrblt', 'rooms':'#st|geo|rm', 'bedrooms':'#st|geo|br', 'commute':'#pop|geo|cmte'}
 FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'rent':'#hh|geo|~rent'}
 HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'yearoccupied':'#st|geo|~yrocc', 'size':'#hh|geo|~size', 'children':'#hh|geo|child', 
                     'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race', 'origin':'#pop|geo|origin'}
                  
 calculations = process()
-summation = Reduction(how='summation', by='summation') 
-average = Reduction(how='wtaverage', by='summation')
-
-rendertable = lambda tableID:  print(renderer(calculations[tableID]))
-gettable = lambda tableID, *args, **kwargs: calculations[tableID](*args, **kwargs)   
-getyears = lambda table: np.array([int(i) for i in table.headers['date']])
-getrates = lambda table: table.arrays[table.datakeys[0]]
 
 
-class Rate_History(object):
-    def __str__(self): return '\n'.join([str(table) for table in self.__tables])
+class HistogramFeed(dict):
     def __init__(self, *args, **kwargs):
-        self.__tables = {key:gettable(tableID, *args, **kwargs) for key, tableID in RATE_TABLES.items()}
-        self.__weights = {key:gettable(tableID, *args, **kwargs).arrays[key] for key, tableID in WEIGHT_TABLES.items()}
+        for key, tableID in self.tableIDs.items():
+            print(renderer(calculations[tableID]))
+            self[key] = calculations[tableID](*args, **kwargs)
+            assert self[key].layers == 1
+        
+    def __call__(self, *args, **kwargs): 
+        for key, table in self.items():        
+            table = self.__squeeze(table, *args, axis='geography', **kwargs)
+            table = self.__squeeze(table, *args, axis='date', **kwargs)
+            assert len(table.headers['geography']) == len(table.headers['date']) == 1
+            yield key, table.tohistogram()
+
+    def curve(self, key, *args, method='average', **kwargs): 
+        table = self[key]
+        for axis in table.axes: 
+            if axis in kwargs.keys(): table = self.__squeeze(table, *args, axis=axis, **kwargs)
+            else: pass
+        x = np.array([table.variables[key].fromstr(string).value for string in table.headers[key]])
+        y = table.arrays[table.datakeys[0]]
+        return self.__createcurve(method, x, y, *args, **kwargs)
+
+    @keydispatcher
+    def __createcurve(self, method, x, y, *args, **kwargs): raise KeyError(method)
+    @__createcurve.register('average')
+    def __average(self, x, y, *args, weights=None, **kwargs): return _curve(x, y, np.average(y, weights=_normalize(weights) if weights else None))
+    @__createcurve.register('last')
+    def __last(self, x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(y)])
+            
+    def __squeeze(self, table, *args, axis, **kwargs):
+        axisargument = kwargs.get(axis, None)
+        if hasattr(axisargument, '__call__'): return axisargument(table, *args, axis=axis, **kwargs).squeeze(axis)
+        elif isinstance(axisargument, str): return table[{axis, axisargument}].squeeze(axis)
+        elif axisargument is None: return table.squeeze(axis)        
+        else: raise ValueError(axisargument)    
+   
+    @classmethod
+    def create(cls, name, **tableIDs):
+        def wrapper(subclass): return type(subclass.__name__, (subclass, cls), {'name':name, 'tableIDs':tableIDs})
+        return wrapper
+            
     
-    def __call__(self, *args, **kwargs):
-        if 'geography' in kwargs.keys(): tables = {key:table[{'geography':kwargs['geography']}] for key, table in self.__tables.items()}
-        else: tables = {key:self.average(table, *args, axis='geography', weights=self.__weights, **kwargs) for key, table in self.__tables.items()}
-        return {key:(getyears(table), getrates(table)) for key, table in tables.items()}
+@HistogramFeed.create('finance', **FINANCE_TABLES)
+class FinanceFeed: pass
 
+@HistogramFeed.create('household', **HOUSEHOLD_TABLES)
+class HouseholdFeed: pass
 
-#class MonteCarlo(object):
-#    __instances = {}
-#    def __new__(cls, *args, geography, date, **kwargs):
-#        key = hash((cls.__name__, hash(date), hash(geography),))
-#        instance = cls.__instances.get(key, super().__new__(cls))
-#        if key not in cls.__instances.keys(): cls.__instances[key] = instance
-#        return instance
-#
-#    def __init__(self, tables, *args, **kwargs):
-#        self.__tables = {key:gettable(tableID, *args, **kwargs) for key, tableID in self.tableIDs.items()}
-#        self.__correlationmatrix = np.zero((len(self), len(self)))
-#        np.fill_diagonal(self.__correlationmatrix, 1)
-#        
-#    def __call__(self, size, *args, **kwargs):
-#        if 'geography' in kwargs.keys(): tables = {key:table[{'geography':kwargs['geography']}] for key, table in self.__tables.items()}
-#        else: tables = {key:self.summation(table, *args, axis='geography', weights=self.__weights, **kwargs) for key, table in self.__tables.items()}
-#        tables = {key:table.tohistorgram() for key, table in tables.items()}
-#        concepts = ODict([(table.axiskey, table.concepts) for table in tables.values()])
-#        keys = [table.axiskey for table in tables.values()]
-#        samplematrix = self.__samplematrix(tables, size, *args, **kwargs)                      
-#        
-#    def __samplematirx(self, tables, size, *args, method='cholesky', **kwargs):
-#        samplematrix = np.array([table(size) for table in tables.values()]) 
-#        if method == 'cholesky':
-#            correlation_matrix = cholesky(self.__correlationmatrix, lower=True)
-#        elif method == 'eigen':
-#            evals, evecs = eigh(self.__correlationmatrix)
-#            correlation_matrix = np.dot(evecs, np.diag(np.sqrt(evals)))
-#        else: raise ValueError(method)
-#        return np.dot(correlation_matrix, samplematrix).transpose()     
-#
-#    @classmethod
-#    def create(cls, **tableIDs):
-#        def wrapper(subclass): return type(subclass.__name__, (subclass, cls), {'tableIDs':tableIDs})
-#        return wrapper
-#
-#
-#@MonteCarlo.create(**FINANCE_TABLES, **HOUSEHOLD_TABLES)
-#class Households_MonteCarlo(MonteCarlo): pass
-#
-#@MonteCarlo.create(**HOUSING_TABLES)
-#class Housing_MonteCarlo(MonteCarlo): pass
+@HistogramFeed.create('housing', **HOUSING_TABLES)
+class HousingFeed: pass
 
-
-
-
-
+@HistogramFeed.create('rate', **RATE_TABLES)
+class RateFeed: pass
 
 
 

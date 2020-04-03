@@ -17,7 +17,7 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space community proximity quality')):
+class Housing(ntuple('Housing', 'unit geography sqftcost crimes schools space community proximity quality')):
     stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase'       
     concepts = {} 
     
@@ -47,8 +47,8 @@ class Housing(ntuple('Housing', 'unit sqftcost geography crimes schools space co
         contents = dict(sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price)
         return self.stringformat.format(unit=unit, **contents)          
     
-#    def __init__(self, *args, sqftprice, sqftrent, **kwargs): self.__sqftrent, self.__sqftprice = sqftrent, sqftprice     
-#    def __hash__(self): return hash((self.__class__.__name__, ))
+    def __init__(self, *args, sqftprice, sqftrent, **kwargs): self.__sqftrent, self.__sqftprice = sqftrent, sqftprice     
+    def __hash__(self): return hash((self.__class__.__name__, self.unit, hash(self.geography), self.sqftcost, hash(self.crimes), hash(self.schools), hash(self.space), hash(self.community), hash(self.proximity), hash(self.quality),))
     def __getitem__(self, key): return self.todict()[key]
     def todict(self): return self._asdict()
     

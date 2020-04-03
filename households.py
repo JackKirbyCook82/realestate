@@ -65,11 +65,11 @@ class Household(ntuple('Household', 'age race origin language education children
     def __getitem__(self, key): return self.todict()[key]
     def todict(self): return self._asdict()
 
-    @classmethod
-    def create(cls, *args, age, education, race, origin, language, children, size, **kwargs):
-        financials = Financials.create(*args, age=age, education=education, ages=cls.ages, **kwargs)
-        utility = Utility.create(*args, **kwargs)
-        return cls(age=age, race=race, origin=origin, language=language, education=education, children=children, size=size, financials=financials, utility=utility)
+#    @classmethod
+#    def create(cls, *args, age, education, race, origin, language, children, size, **kwargs):
+#        financials = Financials.create(*args, age=age, education=education, ages=cls.ages, **kwargs)
+#        utility = Utility.create(*args, **kwargs)
+#        return cls(age=age, race=race, origin=origin, language=language, education=education, children=children, size=size, financials=financials, utility=utility)
 
         
     

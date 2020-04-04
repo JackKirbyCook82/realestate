@@ -11,7 +11,8 @@ from scipy.linalg import cholesky, eigh
 import tables as tbls
 from variables import Geography, Date
 
-from realestate.economy import School, Bank, Broker
+from realestate.feed import FinanceFeed, HouseholdFeed, HousingFeed, RateFeed
+from realestate.economy import School, Bank, Broker, Rate
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -27,17 +28,23 @@ geography = Geography(dict(state=6, county=29, tract='*'))
 history = [Date(year=item) for item in range(2010, 2018 + 1)]
 date = Date(year=2018)                           
 
-broker = Broker(name='ReMax', commisions=0.03)
+ratefeed = RateFeed(geography=geography, dates=history)
+financefeed = FinanceFeed(geography=geography, date=date)
+householdfeed = HouseholdFeed(geography=geography, date=date)
+housingfeed = HousingFeed(geography=geography, date=date)
 
-mortgage_bank = Bank('mortgage', name='Chase', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
-studentloan_bank = Bank('studentloan', name='SallyMae', rate=0.07, duration=15, basis='year')
-debt_bank = Bank('debt', name='Citi', rate=0.25, duration=3, basis='year')
+broker = Broker(commisions=0.03)
+rates = {'wealth':Rate('wealth', date.year, 0.03), **{key:Rate(key, x, y, method='average', basis='year') for key, x, y in ratefeed()}}
 
-basic_school = School('basisschool', name='Dulles Middle School', cost=0, duration=0)
-grade_school = School('gradeschool', name='Dulles High School', cost=0, duration=3)
-associates = School('associates', name='DeVry', cost=25000, duration=5)
-bachelors = School('bachelors', name='University of Houston', cost=50000, duration=7)
-graduate = School('gradudate', name='Rice University', cost=75000, duration=10)
+mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
+studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
+debt_bank = Bank('debt', rate=0.25, duration=3, basis='year')
+
+basic_school = School('basisschool', cost=0, duration=0, basis='year')
+grade_school = School('gradeschool', cost=0, duration=3, basis='year')
+associates = School('associates', cost=25000, duration=5, basis='year')
+bachelors = School('bachelors', cost=50000, duration=7, basis='year')
+graduate = School('gradudate', cost=75000, duration=10, basis='year')
 
 DISCOUNTRATE = 0.02
 RISKTOLERANCE = 2

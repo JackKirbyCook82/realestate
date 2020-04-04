@@ -40,7 +40,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([field, repr(self[field])]) for field in self._fields]))  
     def __hash__(self): return hash((self.__class__.__name__, self.horizon, self.discountrate, self.risktolerance, self.income, self.wealth, self.value, self.consumption, hash(self.mortgage), hash(self.studentloan), hash(self.debt),))    
 
-    def __new__(cls, horizonduration, incomeduration, *args, targets={}, terminalwealth=0, basis='year', **kwargs):        
+    def __new__(cls, horizonduration, incomeduration, *args, targets={}, terminalwealth=0, basis='month', **kwargs):        
         kwargs.update({'discountrate':_monthrate(kwargs['discountrate']), 'income':_monthflow(kwargs['income'])})
         targets = {_monthduration[basis](duration):wealthtarget for duration, wealthtarget in targets.keys()}
         horizon, incomehorizon, consumption = horizonduration, incomeduration, cls.__consumption(horizonduration, incomeduration, terminalwealth, *args, basis=basis, **kwargs)  
@@ -52,7 +52,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
         return instance  
 
     @classmethod
-    def __consumption(cls, horizonduration, incomeduration, terminalwealth, *args, discountrate, risktolerance, income, wealth, value, basis='year', **kwargs):
+    def __consumption(cls, horizonduration, incomeduration, terminalwealth, *args, discountrate, risktolerance, income, wealth, value, basis='month', **kwargs):
         horizonduration, incomeduration = [_monthduration[basis](kwargs[rate]) for rate in (horizonduration, incomeduration)]   
         wealthrate, incomerate, valuerate = [_monthrate[basis](kwargs[rate]) for rate in ('wealthrate', 'incomerate', 'valuerate')]      
         mortgage, studentloan, debt = [kwargs.get(loan, None) for loan in ('mortgage', 'studentloan', 'debt')]
@@ -67,7 +67,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
         if consumption < 0: raise UnstableLifeStyleError()   
         else: return horizonduration, int(consumption)    
      
-    def wealth(self, duration, *args, basis='year', **kwargs):
+    def wealth(self, duration, *args, basis='month', **kwargs):
         if duration > self.__horizonduration: raise ExceededHorizonError()
         duration = _monthduration[basis](kwargs[duration]) 
         wealthrate, incomerate, valuerate = [_monthrate[basis](kwargs[rate]) for rate in ('wealthrate', 'incomerate', 'valuerate')]              
@@ -79,7 +79,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
         d = loan_factor(self.debt.rate, wealthrate, min(duration, self.debt.duration)) if self.debt is not None else 0    
         return w * self.wealth + i * self.income - c * self.consumption - m * self.mortgage.balance - s * self.studentloan.balance - d * self.debt.balance
     
-    def value(self, duration, *args, valuerate, basis='year', **kwargs):
+    def value(self, duration, *args, valuerate, basis='month', **kwargs):
         if duration > self.__horizonduration: raise ExceededHorizonError()
         duration = _monthduration[basis](kwargs[duration])
         valuerate = _monthrate[basis](kwargs[valuerate])   
@@ -117,7 +117,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
         if not bank.qualify(newfinancials.coverage): raise InsufficientCoverageError()
         return newfinancials
     
-    def projection(self, duration, *args, basis='year', **kwargs):  
+    def projection(self, duration, *args, basis='month', **kwargs):  
         newwealth = self.wealth(duration, *args, basis=basis, **kwargs)
         newvalue = self.value(duration, *args, basis=basis, **kwargs)       
         duration = _monthduration[basis](kwargs[duration])

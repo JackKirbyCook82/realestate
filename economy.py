@@ -41,21 +41,33 @@ def average(x, y, w, *args, **kwargs): return _curve(x, y, np.average(y, weights
 def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
 
 
-class Rate(ntuple('Rate', 'type date curve')):
-    stringformat = 'Rate|{type} {rate}%/MO @{date}'
-    def __str__(self): return self.stringformat.format(**{'type':uppercase(self.type), 'rate':curve(self.date), 'date':self.date})    
+class Environment(object):
+    def __init__(self, *args, geography, date, rates, finance, households, housing, **kwargs):
+        self.__geography, self.__date = geography, date
+        self.__finance, self.__households, self.__housing = finance, households, housing
+        self.__rates = rates
+        
+        
+        
+        
+        
+
+
+class Rate(ntuple('Rate', 'type average curve')):
+    stringformat = 'Rate|{type} {rate}%/MO(avg)'
+    def __str__(self): return self.stringformat.format(**{'type':self.type, 'rate':self.average})      
     def __call__(self, x): return self.curve(x)
         
-    def __new__(cls, name, x, y, *args, method='average', basis='year', **kwargs): 
+    def __new__(cls, ratetype, x, y, *args, method='average', basis='year', **kwargs): 
         w = kwargs.get('weights', np.ones(len(y)))
-        x, y, w, t = np.array(x), np.vectorize(lambda i: _monthrate[basis](i))(y), _normalize(w), np.argmax(x)
+        x, y, w = np.array(x), np.vectorize(lambda i: _monthrate[basis](i))(y), _normalize(w)
         assert len(x) == len(y) == len(w)
-        return super().__new__(cls, name, t, curve(method, x, y, w, *args, **kwargs))
+        return super().__new__(cls, ratetype, np.mean(y), curve(method, x, y, w, *args, **kwargs))
 
 
 class Loan(ntuple('Loan', 'type balance rate duration')):
-    stringformat = 'Loan|{type} ${balance} for {duration}-MOS @{rate}%/MO' 
-    def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
+    stringformat = 'Loan|{type} ${balance} for {duration}MO @{rate}%/MO' 
+    def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))  
     def __hash__(self): return hash((self.__class__.__name__, self.type, self.balance, self.rate, self.duration,))       
     
@@ -75,14 +87,14 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     
 class Broker(ntuple('Broker', 'commisions')): 
     stringformat = 'Broker|{commisions}%' 
-    def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
+    def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))          
     def cost(self, amount): return amount * (1 + self.commisions)    
  
     
-class School(ntuple('Education', 'type name cost duration')):
-    stringformat = 'School|{type} costing ${cost} over {duration}-YRS' 
-    def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
+class School(ntuple('Education', 'type cost duration')):
+    stringformat = 'School|{type} costing ${cost} over {duration}MO' 
+    def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))  
     
     def __new__(cls, *args, duration, basis='year', **kwargs): 
@@ -90,8 +102,8 @@ class School(ntuple('Education', 'type name cost duration')):
 
     
 class Bank(ntuple('bank', 'type rate duration financing coverage loantovalue')):
-    stringformat = 'Bank|{type} providing {rate}%/MO for {duration}-MOS' 
-    def __str__(self): return self.stringformat.format({key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
+    stringformat = 'Bank|{type} providing {rate}%/MO for {duration}MO' 
+    def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))      
     
     def __new__(cls, *args, rate, duration, financing=0, coverage=0, loantovalue=1, basis='year', **kwargs): 

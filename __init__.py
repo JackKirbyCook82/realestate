@@ -18,7 +18,7 @@ from parsers import ListParser, DictParser
 from utilities.inputparsers import InputParser
 from uscensus import process, renderer
 
-from realestate.economy import School, Bank, Broker, Rate, Environment
+from realestate.economy import School, Bank, Broker, Environment
 from realestate.households import Household
 from realestate.housing import Housing
 
@@ -45,26 +45,23 @@ calculations = process()
 summation = Reduction(how='summation', by='summation')
 arraytable = lambda tableID, *args, **kwargs: calculations[tableID](*args, **kwargs)
 histtable = lambda tableID, *args, **kwargs: summation(arraytable(tableID, *args, **kwargs), *args, axis='geography', **kwargs).squeeze('geography').tohistogram()
-x = lambda table: np.array([table.variables['date'].fromstr(string).value for string in table.headers['date']])
-y = lambda table: table.arrays[table.datakeys[0]]
-rate = lambda key, table: Rate(key, x(table), y(table), method='average', basis='year')
+
+#x = lambda table: np.array([table.variables['date'].fromstr(string).value for string in table.headers['date']])
+#y = lambda table: table.arrays[table.datakeys[0]]
+#rate = lambda key, table: Rate(key, x(table), y(table), method='average', basis='year')
 
 
 def main(*args, geography, date, history, **kwargs):     
     print(str(inputparser), '\n')  
     print(str(calculations), '\n')
-    
-    rate_arraytables = {key:arraytable(tableID, *args, geography=geography, dates=history, **kwargs) for key, tableID in RATE_TABLES.items()}
+
     #finance_histograms = {key:histtable(tableID, *args, geography=geography, date=date, **kwargs) for key, tableID in FINANCE_TABLES.items()}
     #household_histograms = {key:histtable(tableID, *args, geography=geography, date=date, **kwargs) for key, tableID in HOUSEHOLD_TABLES.items()}
     #housing_histograms = {key:histtable(tableID, *args, geography=geography, date=date, **kwargs) for key, tableID in HOUSING_TABLES.items()}
 
-    #rates = {'wealth':Rate('wealth', int(date.year), WEALTH_RATE), **{key:rate(key, table) for key, table in rate_arraytables.items()}}
     #environment = Environment(date=date, geography=geography, rates=rates, finance=finance_histograms, households=household_histograms, housing=housing_histograms)
 
-    for key, table in rate_arraytables.items():
-        print(key)
-        print(table)
+
 
 
 if __name__ == '__main__':  

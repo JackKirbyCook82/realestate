@@ -72,33 +72,32 @@ class Space_UtilityIndex:
                 'sqft/bedroom':space.sqft * (1-(space.bedrooms/space.rooms)) / space.bedrooms}
 
 
-@UtilityIndex.create('inverted', {'avgcommute':1, 'midcommute':1, 'stdcommute':1})
-class Proximity_UtilityIndex: 
-    def execute(self, household, *args, proximity, **kwargs): 
-        return {'avgcommute':proximity.commute.mean(bounds=[MINCOMMUTE, MAXCOMMUTE]), 'midcommute':proximity.commute.median(bounds=[MINCOMMUTE, MAXCOMMUTE]), 
-                'stdcommute':proximity.commute.mean(bounds=[MINCOMMUTE, MAXCOMMUTE]) + proximity.commute.std(bounds=[MINCOMMUTE, MAXCOMMUTE])}
+#@UtilityIndex.create('inverted', {'avgcommute':1, 'midcommute':1, 'stdcommute':1})
+#class Proximity_UtilityIndex: 
+#    def execute(self, household, *args, proximity, **kwargs): 
+#        return {'avgcommute':proximity.avgcommute, 'midcommute':proximity.midcommute, 'stdcommute':proximity.avgcommute + proximity.stdcommute}
 
 
-@UtilityIndex.create('tangent', {'race':3, 'age':2, 'children':2, 'origin':4, 'education':1, 'language':3})
-class Community_UtilityIndex: 
-    def execute(self, household, *args, community, **kwargs): 
-        category_percent = lambda attr: community[attr][household[attr]]/community[attr].total()     
-        category_variable = lambda attr: community[attr].xdev(str(household[attr]))
-        return {'race':category_percent('race'), 'origin':category_percent('origin'), 'language':category_percent('language'), 'children':category_percent('children'),
-                'age':community.age.xdev(household.age, bounds=household.household_lifetime), 'education':category_variable('education')}
+#@UtilityIndex.create('tangent', {'race':3, 'age':2, 'children':2, 'origin':4, 'education':1, 'language':3})
+#class Community_UtilityIndex: 
+#    def execute(self, household, *args, community, **kwargs): 
+#        category_percent = lambda attr: community[attr][household[attr]]/community[attr].total()     
+#        category_variable = lambda attr: community[attr].xdev(str(household[attr]))
+#        return {'race':category_percent('race'), 'origin':category_percent('origin'), 'language':category_percent('language'), 'children':category_percent('children'),
+#                'age':community.age.xdev(household.age, bounds=household.household_lifetime), 'education':category_variable('education')}
 
 
-class Utility(CobbDouglas_UtilityFunction):
-    def create(cls, *args, **kwargs):
-        crime_index = Crime_UtilityIndex(amplitude=1, tolerances={})
-        school_index = School_UtilityIndex(amplitude=1, tolerances={})
-        space_index = Space_UtilityIndex(amplitude=1, tolerances={})
-        consumption_index = Consumption_UtilityIndex(amplitude=1, tolerances={})
-        community_index = Community_UtilityIndex(amplitude=1, tolerances={})
-        proximity_index = Proximity_UtilityIndex(amplitude=1, tolerances={})
-        quality_index = Quality_UtilityIndex(amplitude=1, tolerances={})
-        indexes = {'crime':crime_index, 'school':school_index, 'space':space_index, 'consumption':consumption_index, 'community':community_index, 'proximity':proximity_index, 'quality':quality_index}
-        return cls(indexes, amplitude=1, subsistences={}, weights={}, diminishrate=1)   
+#class Utility(CobbDouglas_UtilityFunction):
+#    def create(cls, *args, **kwargs):
+#        crime_index = Crime_UtilityIndex(amplitude=1, tolerances={})
+#        school_index = School_UtilityIndex(amplitude=1, tolerances={})
+#        space_index = Space_UtilityIndex(amplitude=1, tolerances={})
+#        consumption_index = Consumption_UtilityIndex(amplitude=1, tolerances={})
+#        community_index = Community_UtilityIndex(amplitude=1, tolerances={})
+#        proximity_index = Proximity_UtilityIndex(amplitude=1, tolerances={})
+#        quality_index = Quality_UtilityIndex(amplitude=1, tolerances={})
+#        indexes = {'crime':crime_index, 'school':school_index, 'space':space_index, 'consumption':consumption_index, 'community':community_index, 'proximity':proximity_index, 'quality':quality_index}
+#        return cls(indexes, amplitude=1, subsistences={}, weights={}, diminishrate=1)   
         
     
 

@@ -15,7 +15,7 @@ from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Broker', 'Rate', 'Loan', 'School', 'Bank']
+__all__ = ['Broker', 'Loan', 'School', 'Bank']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -48,21 +48,16 @@ class Environment(object):
         self.__rates = rates
         
         
-        
-        
-        
-
-
-class Rate(ntuple('Rate', 'type average curve')):
-    stringformat = 'Rate|{type} {rate}%/MO(avg)'
-    def __str__(self): return self.stringformat.format(**{'type':self.type, 'rate':self.average})      
-    def __call__(self, x): return self.curve(x)
-        
-    def __new__(cls, ratetype, x, y, *args, method='average', basis='year', **kwargs): 
-        w = kwargs.get('weights', np.ones(len(y)))
-        x, y, w = np.array(x), np.vectorize(lambda i: _monthrate[basis](i))(y), _normalize(w)
-        assert len(x) == len(y) == len(w)
-        return super().__new__(cls, ratetype, np.mean(y), curve(method, x, y, w, *args, **kwargs))
+#class Rate(ntuple('Rate', 'type average curve')):
+#    stringformat = 'Rate|{type} {rate}%/MO(avg)'
+#    def __str__(self): return self.stringformat.format(**{'type':self.type, 'rate':self.average})      
+#    def __call__(self, x): return self.curve(x)
+#        
+#    def __new__(cls, ratetype, x, y, *args, method='average', basis='year', **kwargs): 
+#        w = kwargs.get('weights', np.ones(len(y)))
+#        x, y, w = np.array(x), np.vectorize(lambda i: _monthrate[basis](i))(y), _normalize(w)
+#        assert len(x) == len(y) == len(w)
+#        return super().__new__(cls, ratetype, np.mean(y), curve(method, x, y, w, *args, **kwargs))
 
 
 class Loan(ntuple('Loan', 'type balance rate duration')):

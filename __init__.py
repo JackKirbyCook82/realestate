@@ -35,16 +35,16 @@ DISCOUNTRATE = 0.02
 RISKTOLERANCE = 2
 AGES = {'adulthood':15, 'retirement':65, 'death':95}
 
-RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgrent@renter'}
-HOUSING_TABLES = {'yearoccupied':'#st|geo|yrblt', 'rooms':'#st|geo|rm', 'bedrooms':'#st|geo|br', 'commute':'#pop|geo|cmte'}
-FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'rent':'#hh|geo|~rent'}
+#RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgrent@renter'}
+#HOUSING_TABLES = {'yearoccupied':'#st|geo|yrblt', 'rooms':'#st|geo|rm', 'bedrooms':'#st|geo|br', 'commute':'#pop|geo|cmte'}
+FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val'}
 HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'yearoccupied':'#st|geo|~yrocc', 'size':'#hh|geo|~size', 'children':'#hh|geo|child', 
                     'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race', 'origin':'#pop|geo|origin'}
 
 calculations = process()
 summation = Reduction(how='summation', by='summation')
 arraytable = lambda tableID, *args, **kwargs: calculations[tableID](*args, **kwargs)
-histtable = lambda tableID, *args, **kwargs: summation(arraytable(tableID, *args, **kwargs), *args, axis='geography', **kwargs).squeeze('geography').tohistogram()
+histtable = lambda table: summation(table, axis='geography').squeeze('geography').tohistogram()
 
 #x = lambda table: np.array([table.variables['date'].fromstr(string).value for string in table.headers['date']])
 #y = lambda table: table.arrays[table.datakeys[0]]
@@ -55,9 +55,13 @@ def main(*args, geography, date, history, **kwargs):
     print(str(inputparser), '\n')  
     print(str(calculations), '\n')
 
-    #finance_histograms = {key:histtable(tableID, *args, geography=geography, date=date, **kwargs) for key, tableID in FINANCE_TABLES.items()}
-    #household_histograms = {key:histtable(tableID, *args, geography=geography, date=date, **kwargs) for key, tableID in HOUSEHOLD_TABLES.items()}
-    #housing_histograms = {key:histtable(tableID, *args, geography=geography, date=date, **kwargs) for key, tableID in HOUSING_TABLES.items()}
+    finance = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in FINANCE_TABLES.items()}
+    households = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSEHOLD_TABLES.items()}
+    #housing = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSING_TABLES.items()}
+
+    for key, table in finance.items(): print(table)
+    for key, table in households.items(): print(table)
+    for key, table in housing.items(): print(table)
 
     #environment = Environment(date=date, geography=geography, rates=rates, finance=finance_histograms, households=household_histograms, housing=housing_histograms)
 

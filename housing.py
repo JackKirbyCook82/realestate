@@ -8,7 +8,7 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
-from utilities.field import field
+from utilities.fields import concept, layer
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -17,12 +17,12 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-Crime = field('crime', ['shooting', 'arson', 'burglary', 'assault', 'vandalism', 'robbery', 'arrest', 'other', 'theft'])
-School = field('school', ['graduation_rate', 'reading_rate', 'math_rate', 'ap_enrollment', 'avgsat_score', 'avgact_score', 'student_density', 'inexperience_ratio'])
-Space = field('space', ['sqft', 'bedrooms', 'rooms'])
-Quality = field('quality', ['yearbuilt'])
-Proximity = field('proximity', ['commute'])
-Community = field('community', ['race', 'language', 'education', 'age', 'children'])
+Crime = concept('crime', ['shooting', 'arson', 'burglary', 'assault', 'vandalism', 'robbery', 'arrest', 'other', 'theft'])
+School = concept('school', ['graduation_rate', 'reading_rate', 'math_rate', 'ap_enrollment', 'avgsat_score', 'avgact_score', 'student_density', 'inexperience_ratio'])
+Space = concept('space', ['sqft', 'bedrooms', 'rooms'])
+Quality = concept('quality', ['yearbuilt'])
+Proximity = layer('proximity', ['commute'])
+Community = layer('community', ['race', 'language', 'education', 'age', 'children'])
 
 
 class Housing(ntuple('Housing', 'unit geography sqftcost crimes schools space community proximity quality')):

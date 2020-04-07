@@ -48,18 +48,6 @@ class Environment(object):
         self.__rates = rates
         
         
-#class Rate(ntuple('Rate', 'type average curve')):
-#    stringformat = 'Rate|{type} {rate}%/MO(avg)'
-#    def __str__(self): return self.stringformat.format(**{'type':self.type, 'rate':self.average})      
-#    def __call__(self, x): return self.curve(x)
-#        
-#    def __new__(cls, ratetype, x, y, *args, method='average', basis='year', **kwargs): 
-#        w = kwargs.get('weights', np.ones(len(y)))
-#        x, y, w = np.array(x), np.vectorize(lambda i: _monthrate[basis](i))(y), _normalize(w)
-#        assert len(x) == len(y) == len(w)
-#        return super().__new__(cls, ratetype, np.mean(y), curve(method, x, y, w, *args, **kwargs))
-
-
 class Loan(ntuple('Loan', 'type balance rate duration')):
     stringformat = 'Loan|{type} ${balance} for {duration}MO @{rate}%/MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    

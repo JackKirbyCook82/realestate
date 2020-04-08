@@ -27,7 +27,7 @@ class PrematureHouseholderError(Exception): pass
 class DeceasedHouseholderError(Exception): pass
  
 
-class Household(ntuple('Household', 'age race origin language education children size')):
+class Household(ntuple('Household', 'age race language education children size')):
     ages = {'adulthood':15, 'retirement':65, 'dealth':95}
     stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'       
     concepts = {} 
@@ -66,10 +66,10 @@ class Household(ntuple('Household', 'age race origin language education children
     def todict(self): return self._asdict()
 
 #    @classmethod
-#    def create(cls, *args, age, education, race, origin, language, children, size, **kwargs):
+#    def create(cls, *args, age, education, race, language, children, size, **kwargs):
 #        financials = Financials.create(*args, age=age, education=education, ages=cls.ages, **kwargs)
 #        utility = Utility.create(*args, **kwargs)
-#        return cls(age=age, race=race, origin=origin, language=language, education=education, children=children, size=size, financials=financials, utility=utility)
+#        return cls(age=age, race=race, language=language, education=education, children=children, size=size, financials=financials, utility=utility)
 
         
     

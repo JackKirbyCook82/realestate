@@ -8,6 +8,8 @@ Created on Sun Feb 23 2020
 
 import numpy as np
 from scipy.interpolate import interp1d
+from scipy.linalg import cholesky, eigh
+from itertools import chain
 from collections import namedtuple as ntuple
 
 from utilities.strings import uppercase
@@ -39,13 +41,6 @@ def curve(method, x, y, *args, **kwargs): raise KeyError(method)
 def average(x, y, w, *args, **kwargs): return _curve(x, y, np.average(y, weights=_normalize(w) if w else None))
 @curve.register('last')
 def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
-
-
-class Environment(object):
-    def __init__(self, *args, geography, date, rates, finance, households, housing, **kwargs):
-        self.__geography, self.__date = geography, date
-        self.__finance, self.__households, self.__housing = finance, households, housing
-        self.__rates = rates
         
         
 class Loan(ntuple('Loan', 'type balance rate duration')):
@@ -81,7 +76,7 @@ class School(ntuple('Education', 'type cost duration')):
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))  
     
     def __new__(cls, *args, duration, basis='year', **kwargs): 
-        return super().__new__(cls, *args, duration=_monthduration[basis](kwargs['duration']), **kwargs) 
+        return super().__new__(cls, *args, duration=_monthduration[basis](duration), **kwargs) 
 
     
 class Bank(ntuple('bank', 'type rate duration financing coverage loantovalue')):
@@ -90,7 +85,7 @@ class Bank(ntuple('bank', 'type rate duration financing coverage loantovalue')):
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))      
     
     def __new__(cls, *args, rate, duration, financing=0, coverage=0, loantovalue=1, basis='year', **kwargs): 
-        return super().__new__(cls, *args, rates=_monthrate[basis](kwargs['rates']), duration=_monthduration[basis](kwargs['duration']), financing=financing, coverage=coverage, loantovalue=loantovalue, **kwargs)  
+        return super().__new__(cls, *args, rate=_monthrate[basis](rate), duration=_monthduration[basis](duration), financing=financing, coverage=coverage, loantovalue=loantovalue, **kwargs)  
 
     def loan(self, amount): return Loan(self.type, amount, self.rate, self.duration)
     def qualify(self, coverage): return coverage >= self.coverage
@@ -98,6 +93,58 @@ class Bank(ntuple('bank', 'type rate duration financing coverage loantovalue')):
     def cost(self, amount): return _financingcost(amount, self.financing)
 
 
+class Environment(object):
+    def __init__(self, geography, date, *args, rates, banks, education, broker, finance, households, housing, **kwargs):
+        self.__geography, self.__date = geography, date
+        assert isinstance(broker, Broker)
+        assert all([isinstance(school, School) for school in education.values()])
+        assert all([isinstance(bank, Bank) for bank in banks.values()])
+        for histogram in chain(finance.values(), households.values(), housing.values()): 
+            assert histogram.scope['geography'] == str(geography) 
+            assert histogram.scope['date'] == str(date)
+        self.__finance, self.__households, self.__housing = finance, households, housing
+        self.__rates = rates
 
+
+#class MonteCarlo(object):
+#    __instances = {}
+#    def __new__(cls, *args, geography, date, **kwargs):
+#        key = hash((cls.__name__, hash(date), hash(geography),))
+#        instance = cls.__instances.get(key, super().__new__(cls))
+#        if key not in cls.__instances.keys(): cls.__instances[key] = instance
+#        return instance
+#
+#    def __init__(self, tables, *args, **kwargs):
+#        self.__tables = {key:gettable(tableID, *args, **kwargs) for key, tableID in self.tableIDs.items()}
+#        self.__correlationmatrix = np.zero((len(self), len(self)))
+#        np.fill_diagonal(self.__correlationmatrix, 1)
+#        
+#    def __call__(self, size, *args, **kwargs):
+#        if 'geography' in kwargs.keys(): tables = {key:table[{'geography':kwargs['geography']}] for key, table in self.__tables.items()}
+#        else: tables = {key:self.summation(table, *args, axis='geography', weights=self.__weights, **kwargs) for key, table in self.__tables.items()}
+#        tables = {key:table.tohistorgram() for key, table in tables.items()}
+#        concepts = ODict([(table.axiskey, table.concepts) for table in tables.values()])
+#        keys = [table.axiskey for table in tables.values()]
+#        samplematrix = self.__samplematrix(tables, size, *args, **kwargs)                      
+#        
+#    def __samplematirx(self, tables, size, *args, method='cholesky', **kwargs):
+#        samplematrix = np.array([table(size) for table in tables.values()]) 
+#        if method == 'cholesky':
+#            correlation_matrix = cholesky(self.__correlationmatrix, lower=True)
+#        elif method == 'eigen':
+#            evals, evecs = eigh(self.__correlationmatrix)
+#            correlation_matrix = np.dot(evecs, np.diag(np.sqrt(evals)))
+#        else: raise ValueError(method)
+#        return np.dot(correlation_matrix, samplematrix).transpose()    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     

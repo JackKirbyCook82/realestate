@@ -17,17 +17,9 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-MINSAT, MAXSAT = 400, 1600
-MINACT, MAXACT = 1, 36
-MINST, MAXST = 1, 100
-MINCOMMUTE, MAXCOMMUTE = 0, 120
-
-
 _flatten = lambda nesteditems: [item for items in nesteditems for item in items]
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
 _filterempty = lambda items: [item for item in _aslist(items) if item]
-_percent = lambda x, xmin, xmax: float((xmin+min(x, xmax))/(xmin+xmax))
-_antipercent = lambda x: 100 - x
 
 
 def average_records_generator(*records):
@@ -54,9 +46,8 @@ class Crime_UtilityIndex:
 class School_UtilityIndex: 
     def execute(self, household, *args, schools, **kwargs): 
         school = {key:value for key, value in average_records_generator(*schools.values())}
-        return {'gradulation':school.graduation_rate, 'reading':school.reading_rate, 'math':school.math_rate, 
-                'ap':school.ap_enrollment, 'st':_percent(school.student_density, MINST, MAXST), 'exp':_antipercent(school.inexperience_ratio),
-                'sat':_percent(school.avgsat_score, MINSAT, MAXSAT), 'act':_percent(school.avgact_score, MINACT, MAXACT)} 
+        return {'gradulation':school.graduation_rate, 'reading':school.reading_rate, 'math':school.math_rate, 'ap':school.ap_enrollment, 
+                'st':school.student_density, 'exp':school.inexperience_ratio, 'sat':school.avgsat_score, 'act':school.avgact_score} 
 
 
 @UtilityIndex.create('inverted', {'age':1})
@@ -77,7 +68,6 @@ class Proximity_UtilityIndex:
     def execute(self, household, *args, proximity, **kwargs): 
         return {'avgcommute':proximity.commute.mean(), 'midcommute':proximity.commute.median(), 
                 'stdcommute':proximity.commute.mean() + proximity.commute.std()}
-
 
 
 @UtilityIndex.create('tangent', {'race':4, 'age':2, 'children':2, 'education':1, 'language':3})

@@ -158,3 +158,12 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
 
 
 
+
+
+
+
+
+
+
+
+

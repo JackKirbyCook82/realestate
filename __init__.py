@@ -17,7 +17,7 @@ from utilities.inputparsers import InputParser
 from uscensus import process as uscensus_process
 
 from realestate.feed import process as realestate_process
-from realestate.economy import School, Bank, Broker, Environment
+from realestate.economy import School, Bank, Broker
 from realestate.households import Household
 from realestate.housing import Housing
 
@@ -34,14 +34,18 @@ RISKTOLERANCE = 2
 AGES = {'adulthood':15, 'retirement':65, 'death':95}
 
 RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgrent@renter'}
+FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'yearoccupied':'#st|geo|~yrocc'}
+HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
+POPULATION_TABLES = {'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race'}
 HOUSING_TABLES = {'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'commute':'#pop|geo|~cmte'}
-FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val'}
-HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'yearoccupied':'#st|geo|~yrocc', 'size':'#hh|geo|~size', 'children':'#hh|geo|child', 
-                    'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race'}
+SIZE_TABLES = {'sqft':'#st|geo|sqft'}
+CRIME_TABLES = {}
+SCHOOLS_TABLES = {}        
 
 process = uscensus_process + realestate_process
 calculations = process()
 summation = Reduction(how='summation', by='summation')
+
 arraytable = lambda tableID, *args, **kwargs: calculations[tableID](*args, **kwargs)
 histtable = lambda table: summation(table, axis='geography').squeeze('geography').tohistogram()
 rate = lambda table: np.average(table.arrays[table.datakeys[0]])
@@ -59,19 +63,18 @@ def main(*args, geography, date, history, **kwargs):
     graduate = School('gradudate', cost=75000, duration=10, basis='year')
 
     broker = Broker(commisions=0.03)
-    rates= {key:rate(arraytable(tableID, *args, geography=geography, dates=history, **kwargs)) for key, tableID in RATE_TABLES.items()}
-    rates = {'wealth':WEALTH_RATE, 'discount':DISCOUNTRATE, 'risk':RISKTOLERANCE, **rates}
+    rates = {'wealth':WEALTH_RATE, 'discount':DISCOUNTRATE, 'risk':RISKTOLERANCE}
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
     
+    rates = rates.update({key:rate(arraytable(tableID, *args, geography=geography, dates=history, **kwargs)) for key, tableID in RATE_TABLES.items()})
     finance = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in FINANCE_TABLES.items()}
     households = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSEHOLD_TABLES.items()}
     housing = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSING_TABLES.items()}
-    environment = Environment(geography, date, rates=rates, education=education, banks=banks, broker=broker, finance=finance, households=households, housing=housing)
-
-    for table in finance.values(): print(table)
-    for table in households.values(): print(table)
-    for table in housing.values(): print(table)
+    population = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in POPULATION_TABLES.items()}
+    size = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in SIZE_TABLES.items()}
+    crime = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in CRIME_TABLES.items()}    
+    schools = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in SCHOOLS_TABLES.items()}            
 
 
 if __name__ == '__main__':  

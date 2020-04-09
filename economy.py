@@ -93,17 +93,17 @@ class Bank(ntuple('bank', 'type rate duration financing coverage loantovalue')):
     def cost(self, amount): return _financingcost(amount, self.financing)
 
 
-class Environment(object):
-    def __init__(self, geography, date, *args, rates, banks, education, broker, finance, households, housing, **kwargs):
-        self.__geography, self.__date = geography, date
-        assert isinstance(broker, Broker)
-        assert all([isinstance(school, School) for school in education.values()])
-        assert all([isinstance(bank, Bank) for bank in banks.values()])
-        for histogram in chain(finance.values(), households.values(), housing.values()): 
-            assert histogram.scope['geography'] == str(geography) 
-            assert histogram.scope['date'] == str(date)
-        self.__finance, self.__households, self.__housing = finance, households, housing
-        self.__rates = rates
+#class Environment(object):
+#    def __init__(self, geography, date, *args, rates, banks, education, broker, finance, households, housing, **kwargs):
+#        self.__geography, self.__date = geography, date
+#        assert isinstance(broker, Broker)
+#        assert all([isinstance(school, School) for school in education.values()])
+#        assert all([isinstance(bank, Bank) for bank in banks.values()])
+#        for histogram in chain(finance.values(), households.values(), housing.values()): 
+#            assert histogram.scope['geography'] == str(geography) 
+#            assert histogram.scope['date'] == str(date)
+#        self.__finance, self.__households, self.__housing = finance, households, housing
+#        self.__rates = rates
 
 
 #class MonteCarlo(object):

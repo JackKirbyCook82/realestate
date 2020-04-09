@@ -42,12 +42,12 @@ class Crime_UtilityIndex:
                 'robbery':crime.robbery, 'arrest':crime.arrest, 'other':crime.other, 'theft':crime.theft}
 
 
-@UtilityIndex.create('tangent', {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'stratio':1, 'exp':1})
+@UtilityIndex.create('tangent', {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'teachstu':1, 'unexp':1})
 class School_UtilityIndex: 
     def execute(self, household, *args, schools, **kwargs): 
         school = {key:value for key, value in average_records_generator(*schools.values())}
         return {'gradulation':school.graduation_rate, 'reading':school.reading_rate, 'math':school.math_rate, 'ap':school.ap_enrollment, 
-                'st':school.student_density, 'exp':school.inexperience_ratio, 'sat':school.avgsat_score, 'act':school.avgact_score} 
+                'teachstu':school.teacher_student_ratio, 'unexp':school.inexperience_ratio, 'sat':school.avgsat_score, 'act':school.avgact_score} 
 
 
 @UtilityIndex.create('inverted', {'age':1})

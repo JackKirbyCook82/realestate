@@ -14,9 +14,8 @@ from tables.transformations import Reduction
 from variables import Geography, Date
 from parsers import ListParser, DictParser
 from utilities.inputparsers import InputParser
-from uscensus import process as uscensus_process
 
-from realestate.feed import process as realestate_process
+from realestate.feed import process, variables, renderer
 from realestate.economy import School, Bank, Broker
 from realestate.households import Household
 from realestate.housing import Housing
@@ -42,7 +41,6 @@ SIZE_TABLES = {'sqft':'#st|geo|sqft'}
 CRIME_TABLES = {}
 SCHOOLS_TABLES = {}        
 
-process = uscensus_process + realestate_process
 calculations = process()
 summation = Reduction(how='summation', by='summation')
 
@@ -67,14 +65,17 @@ def main(*args, geography, date, history, **kwargs):
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
     
-    rates = rates.update({key:rate(arraytable(tableID, *args, geography=geography, dates=history, **kwargs)) for key, tableID in RATE_TABLES.items()})
-    finance = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in FINANCE_TABLES.items()}
-    households = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSEHOLD_TABLES.items()}
-    housing = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSING_TABLES.items()}
-    population = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in POPULATION_TABLES.items()}
-    size = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in SIZE_TABLES.items()}
-    crime = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in CRIME_TABLES.items()}    
-    schools = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in SCHOOLS_TABLES.items()}            
+    table = arraytable('#pop|geo|age@child', *args, geography=geography, date=date, **kwargs)
+    print(table)
+    
+    #rates = rates.update({key:rate(arraytable(tableID, *args, geography=geography, dates=history, **kwargs)) for key, tableID in RATE_TABLES.items()})
+    #finance = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in FINANCE_TABLES.items()}
+    #households = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSEHOLD_TABLES.items()}
+    #housing = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSING_TABLES.items()}
+    #population = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in POPULATION_TABLES.items()}
+    #size = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in SIZE_TABLES.items()}
+    #crime = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in CRIME_TABLES.items()}    
+    #schools = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in SCHOOLS_TABLES.items()}            
 
 
 if __name__ == '__main__':  
@@ -89,7 +90,9 @@ if __name__ == '__main__':
     inputparser = InputParser(assignproxy='=', spaceproxy='_', parsers=variable_parsers)    
     
     print(repr(inputparser))
-    print(repr(process), '\n')  
+    print(repr(process))  
+    print(repr(renderer))
+    print(repr(variables))
     
     sys.argv.extend(['geography=state|6,county|29,tract|*', 
                      'date=2018',

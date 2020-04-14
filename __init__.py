@@ -65,7 +65,8 @@ def main(*args, geography, date, history, **kwargs):
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
     
-    table = arraytable('#hh|geo|inc', *args, geography=geography, date=date, **kwargs)
+    #table = arraytable('', *args, geography=geography, date=date, **kwargs)
+    table = arraytable('#agginc|geo', *args, geography=geography, dates=history, **kwargs)
     print(table)
     
     #rates = rates.update({key:rate(arraytable(tableID, *args, geography=geography, dates=history, **kwargs)) for key, tableID in RATE_TABLES.items()})

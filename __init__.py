@@ -38,8 +38,8 @@ HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#h
 POPULATION_TABLES = {'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race'}
 HOUSING_TABLES = {'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'commute':'#pop|geo|~cmte'}
 SIZE_TABLES = {'sqft':'#st|geo|sqft'}
-CRIME_TABLES = {}
-SCHOOLS_TABLES = {}        
+CRIME_TABLES = {'crime':'#ct|geo|crime'}
+SCHOOLS_TABLES = {'sat':'avgsat|geo|schlvl', 'act':'avgact@geo|schlvl', 'grad':'%grad@geo|schlvl', 'ap':'%ap@geo|schlvl', 'math':'%math@geo|schlvl', 'read':'%read@geo|schlvl'}        
 
 calculations = process()
 summation = Reduction(how='summation', by='summation')
@@ -65,10 +65,10 @@ def main(*args, geography, date, history, **kwargs):
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
     
-    #table = arraytable('#hh|geo|~val', *args, geography=geography, date=date, **kwargs)
-    table = arraytable('Δ%avginc', *args, geography=geography, dates=history, **kwargs)
+    table = arraytable('#pop|geo|~gradelvl', *args, geography=geography, date=date, **kwargs)
     print(table)
-    
+                       
+    #table = arraytable('Δ%avginc', *args, geography=geography, dates=history, **kwargs)
     #rates = rates.update({key:rate(arraytable(tableID, *args, geography=geography, dates=history, **kwargs)) for key, tableID in RATE_TABLES.items()})
     #finance = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in FINANCE_TABLES.items()}
     #households = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSEHOLD_TABLES.items()}

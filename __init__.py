@@ -36,11 +36,12 @@ RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgre
 FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'yearoccupied':'#st|geo|~yrocc'}
 HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
 POPULATION_TABLES = {'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race'}
-HOUSING_TABLES = {'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'commute':'#pop|geo|~cmte'}
+HOUSING_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'commute':'#pop|geo|~cmte'}
 SIZE_TABLES = {'sqft':'#st|geo|sqft'}
 CRIME_TABLES = {'crime':'#ct|geo|crime'}
-SCHOOLS_TABLES = {'sat':'avgsat|geo|schlvl', 'act':'avgact@geo|schlvl', 'grad':'%grad@geo|schlvl', 'ap':'%ap@geo|schlvl', 'math':'%math@geo|schlvl', 'read':'%read@geo|schlvl'}        
-
+SCHOOLS_TABLES = {'sat':'%sat|geo|schlvl@student', 'act':'%act|geo|schlvl@student', 'grad':'%grad|geo|schlvl@student', 'ap':'%ap|geo|schlvl@student', 
+                  'math':'%math|geo|schlvl@student', 'read':'%read|geo|schlvl@student', 'exp':'%exp|geo|schlvl@teacher', 'ts':'%pop|geo|schlvl'}        
+                  
 calculations = process()
 summation = Reduction(how='summation', by='summation')
 
@@ -65,19 +66,9 @@ def main(*args, geography, date, history, **kwargs):
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
     
-    table = arraytable('#pop|geo|~gradelvl', *args, geography=geography, date=date, **kwargs)
+    table = arraytable('#pop|geo|schlvl', *args, geography=geography, date=date, **kwargs)
     print(table)
                        
-    #table = arraytable('Δ%avginc', *args, geography=geography, dates=history, **kwargs)
-    #rates = rates.update({key:rate(arraytable(tableID, *args, geography=geography, dates=history, **kwargs)) for key, tableID in RATE_TABLES.items()})
-    #finance = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in FINANCE_TABLES.items()}
-    #households = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSEHOLD_TABLES.items()}
-    #housing = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in HOUSING_TABLES.items()}
-    #population = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in POPULATION_TABLES.items()}
-    #size = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in SIZE_TABLES.items()}
-    #crime = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in CRIME_TABLES.items()}    
-    #schools = {key:histtable(arraytable(tableID, *args, geography=geography, date=date, **kwargs).squeeze('date')) for key, tableID in SCHOOLS_TABLES.items()}            
-
 
 if __name__ == '__main__':  
     tbls.set_options(linewidth=100, maxrows=40, maxcolumns=10, threshold=100, precision=2, fixednotation=True, framechar='=')

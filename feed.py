@@ -39,7 +39,7 @@ variables = variables.update(noncustom_variables)
 process = uscensus_process.copy('realestate', name='RealEstate')
 
 
-crime_tables = {'#ct|geo|crime': {'parms':{}}}
+crime_tables = {'#ct|geo|crime': {'tables':['pop/str|geo', '#st|geo|unit', '#pop|geo|race', '#pop|geo|edu', '#pop|geo|pi|~age'], 'parms':{}}}
 @process.create(**crime_tables)
 def crime_pipeline(tableID, *args, geography, date, **kwargs):
     pass
@@ -50,13 +50,13 @@ def sqft_pipeline(tableID, *args, geography, date, **kwargs):
     pass
 
 
-percent_tables = {'%grad|geo|schlvl@student': {'parms':{}},
-                  '%ap|geo|schlvl@student': {'parms':{}}, 
-                  '%sat|geo|schlvl@student': {'parms':{}}, 
-                  '%act|geo|schlvl@student': {'parms':{}}, 
-                  '%read|geo|schlvl@student': {'parms':{}}, 
-                  '%math|geo|schlvl@student': {'parms':{}},                   
-                  '%exp|geo|schlvl@teacher': {'parms':{}}}
+percent_tables = {'%grad|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
+                  '%ap|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}}, 
+                  '%sat|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
+                  '%act|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
+                  '%read|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
+                  '%math|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},                  
+                  '%exp|geo|schlvl@teacher': {'tables':['#hh|geo|~inc'], 'parms':{}}}
 @process.create(**percent_tables)    
 def percent_pipeline(tabelID, *args, geography, date, **kwargs):
     pass

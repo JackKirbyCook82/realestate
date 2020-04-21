@@ -8,6 +8,7 @@ Created on Tues Apr 7 2020
 
 import os.path
 import numpy as np
+import scipy.stats as stats
 
 import tables as tbls
 from uscensus import renderer
@@ -39,45 +40,71 @@ variables = variables.update(noncustom_variables)
 process = uscensus_process.copy('realestate', name='RealEstate')
 
 
-crime_tables = {'#ct|geo|crime': {'tables':['pop/str|geo', '#st|geo|unit', '#pop|geo|race', '#pop|geo|edu', '#pop|geo|pi|~age'], 'parms':{}}}
-@process.create(**crime_tables)
-def crime_pipeline(tableID, *args, geography, date, **kwargs):
-    pass
+def uniform(*args, xmin, xmax, step=1, **kwargs):
+    return lambda size: np.round(stats.uniform(loc=xmin, scale=xmax).rvs(size) / step) * step 
+
+def normal(*args, mean, std, step=1, **kwargs):
+    return lambda size: np.round(stats.normal(loc=mean, scale=std).rvs(size) / step) * step 
+
+def beta(a, b, *args, xmin, xmax, step=1, **kwargs):
+    return lambda size: np.round(stats.beta(a, b, loc=xmin, scale=xmax-xmin).rvs(size) / step) * step
 
 
-sqft_tables = {'#st|geo|sqft': {'tables':['#st|geo|unit', '#st|geo|~rm', '#st|geo|~br'], 'parms':{}}}
-def sqft_pipeline(tableID, *args, geography, date, **kwargs):
-    pass
 
 
-percent_tables = {'%grad|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
-                  '%ap|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}}, 
-                  '%sat|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
-                  '%act|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
-                  '%read|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
-                  '%math|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},                  
-                  '%exp|geo|schlvl@teacher': {'tables':['#hh|geo|~inc'], 'parms':{}}}
-@process.create(**percent_tables)    
-def percent_pipeline(tabelID, *args, geography, date, **kwargs):
-    pass
 
 
-student_tables = {'#pop|geo|schlvl@student': {'tables': '#pop|geo|schlvl', 'parms':{}}}
-@process.create(**student_tables)
-def student_pipeline(tableID, *args, **kwargs):
-    pass
 
 
-teacher_pipeline = {'#pop|geo|schlvl@teacher': {'tables': '#pop|geo|schlvl', 'parms':{}}}
-@process.create(**teacher_pipeline)
-def teacher_pipeline(tableID, *args, **kwargs):
-    pass
 
 
-ratio_tables = {'%pop|geo|schlvl': {'tables': ['#pop|geo|schlvl@teacher', '#pop|geo|schlvl@student'], 'parms':{}}}        
-@process.create(**ratio_tables)
-def ratio_pipeline(tableID, *args, **kwargs):
-    pass    
+#distribute_tables = {
+#    '#st|geo|sqft': {
+#        'tables':'#st|geo|unit', 
+#        'parms': {'axis':'unit', 'intoaxis':'sqft', 
+#                  'functions': {'House':beta(2, 2, xmin=1000, xmax=3500, step=25), 
+#                                'Apartment':beta(2, 2, xmin=200, 1750, step=25), 
+#                                'Mobile':beta(2, 2, xmin=100, xmax=800, step=25), 
+#                                'Vehicle':beta(2, 2, xmin=0, xmax=100, step=25)}}}}
+#
+#@process.create(**distribute_tables)            
+#def distribute_pipeline(tableID, table, *args, axis, intoaxis, values, functions, **kwargs):
+#    tables = [distribute(table.vsel(**{axis:item}).squeeze(axis), *args, axis=intoaxis, values=values, function=functions[item], **kwargs) for item in table.header[axis]]
+#    table = tables.pop(0)
+#    try: table = tbls.combinations.merge([table, tables.pop(0)], *args, axis=intoaxis, noncoreaxis=axis, **kwargs)
+#    except IndexError: return table
+#    for other in tables: table = tbls.combinations.append([table, other], *args, axis=intoaxis, noncoreaxis=axis, **kwargs)
+#    return table
+#
+#    
+#percent_tables = {'%grad|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
+#                  '%ap|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}}, 
+#                  '%sat|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
+#                  '%act|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
+#                  '%read|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
+#                  '%math|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},                  
+#                  '%exp|geo|schlvl@teacher': {'tables':['#hh|geo|~inc'], 'parms':{}}}
+#@process.create(**percent_tables)    
+#def percent_pipeline(tabelID, *args, geography, date, **kwargs):
+#    pass
+#
+#
+#student_tables = {'#pop|geo|schlvl@student': {'tables': '#pop|geo|schlvl', 'parms':{}}}
+#@process.create(**student_tables)
+#def student_pipeline(tableID, *args, **kwargs):
+#    pass
+#
+#
+#teacher_pipeline = {'#pop|geo|schlvl@teacher': {'tables': '#pop|geo|schlvl', 'parms':{}}}
+#@process.create(**teacher_pipeline)
+#def teacher_pipeline(tableID, *args, **kwargs):
+#    pass
+#
+#
+#ratio_tables = {'%pop|geo|schlvl': {'tables': ['#pop|geo|schlvl@teacher', '#pop|geo|schlvl@student'], 'parms':{}}}        
+#@process.create(**ratio_tables)
+#def ratio_pipeline(tableID, *args, **kwargs):
+#    pass    
 
 
    

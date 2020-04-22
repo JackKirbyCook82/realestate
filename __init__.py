@@ -36,7 +36,7 @@ RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgre
 FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'yearoccupied':'#st|geo|~yrocc'}
 HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
 POPULATION_TABLES = {'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race'}
-HOUSING_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'commute':'#pop|geo|~cmte'}
+HOUSING_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'sqft':'#st|geo|sqft', 'commute':'#pop|geo|~cmte'}
 SIZE_TABLES = {'sqft':'#st|geo|sqft'}
 CRIME_TABLES = {'crime':'#ct|geo|crime'}
 SCHOOLS_TABLES = {'sat':'%sat|geo|schlvl@student', 'act':'%act|geo|schlvl@student', 'grad':'%grad|geo|schlvl@student', 'ap':'%ap|geo|schlvl@student', 
@@ -66,7 +66,7 @@ def main(*args, geography, date, history, **kwargs):
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
     
-    table = arraytable('', *args, geography=geography, date=date, **kwargs)
+    table = arraytable('#st|geo|unit', *args, geography=geography, date=date, **kwargs)
     print(table)
                        
 

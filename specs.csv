@@ -1,9 +1,5 @@
 datakey,data,datatype,databasis
 ,,,
-sqft,sqft,range,unit=SQFT;precision=0
-,,,
-crime,crime,category,Arrest;0;Theft;1;Other;2;Vandalism;3;Robbery;4;Assault;5;Burglary;6;Arson;7;Shooting;8
-,,,
 count,count,num,unit=CT;precision=0
 teachers,teachers,num,unit=PPL;precision=0
 students,students,num,unit=PPL;precision=0

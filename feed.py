@@ -40,43 +40,6 @@ variables = variables.update(noncustom_variables)
 process = uscensus_process.copy('realestate', name='RealEstate')
 
 
-def uniform(*args, xmin, xmax, step=1, **kwargs):
-    return lambda size: np.round(stats.uniform(loc=xmin, scale=xmax).rvs(size) / step) * step 
-
-def normal(*args, mean, std, step=1, **kwargs):
-    return lambda size: np.round(stats.normal(loc=mean, scale=std).rvs(size) / step) * step 
-
-def beta(a, b, *args, xmin, xmax, step=1, **kwargs):
-    return lambda size: np.round(stats.beta(a, b, loc=xmin, scale=xmax-xmin).rvs(size) / step) * step
-
-
-
-
-
-
-
-
-
-
-#distribute_tables = {
-#    '#st|geo|sqft': {
-#        'tables':'#st|geo|unit', 
-#        'parms': {'axis':'unit', 'intoaxis':'sqft', 
-#                  'functions': {'House':beta(2, 2, xmin=1000, xmax=3500, step=25), 
-#                                'Apartment':beta(2, 2, xmin=200, 1750, step=25), 
-#                                'Mobile':beta(2, 2, xmin=100, xmax=800, step=25), 
-#                                'Vehicle':beta(2, 2, xmin=0, xmax=100, step=25)}}}}
-#
-#@process.create(**distribute_tables)            
-#def distribute_pipeline(tableID, table, *args, axis, intoaxis, values, functions, **kwargs):
-#    tables = [distribute(table.vsel(**{axis:item}).squeeze(axis), *args, axis=intoaxis, values=values, function=functions[item], **kwargs) for item in table.header[axis]]
-#    table = tables.pop(0)
-#    try: table = tbls.combinations.merge([table, tables.pop(0)], *args, axis=intoaxis, noncoreaxis=axis, **kwargs)
-#    except IndexError: return table
-#    for other in tables: table = tbls.combinations.append([table, other], *args, axis=intoaxis, noncoreaxis=axis, **kwargs)
-#    return table
-#
-#    
 #percent_tables = {'%grad|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},
 #                  '%ap|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}}, 
 #                  '%sat|geo|schlvl@student': {'tables':['#pop|geo|race', '#hh|geo|~inc'], 'parms':{}},

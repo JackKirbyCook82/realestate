@@ -6,8 +6,6 @@ Created on Sun Feb 23 2020
 
 """
 
-import numpy as np
-
 from utilities.utility import UtilityIndex, CobbDouglas_UtilityFunction
 
 __version__ = "1.0.0"
@@ -20,12 +18,6 @@ __license__ = ""
 _flatten = lambda nesteditems: [item for items in nesteditems for item in items]
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
 _filterempty = lambda items: [item for item in _aslist(items) if item]
-
-
-#def average_records_generator(*records):
-#    assert all([isinstance(record, dict) for record in records])
-#    keys = set(_flatten([list(record.keys()) for record in records]))
-#    for key in keys: yield key, np.mean(_filterempty([record.get(key, None) for record in records]))
 
 
 @UtilityIndex.create('logarithm', {'consumption':1})
@@ -49,7 +41,6 @@ class Indirect_Crime_UtilityIndex:
 @UtilityIndex.create('inverted', {'shooting':3, 'arson':3, 'burglary':3, 'assault':2, 'vandalism':2, 'robbery':2, 'arrest':1, 'other':1, 'theft':1})
 class Direct_Crime_UtilityIndex: 
     def execute(self, household, *args, crime, **kwargs):
-#        crime = {key:value for key, value in average_records_generator(*crimes.values())}
         return {'shooting':crime.shooting, 'arson':crime.arson, 'burglary':crime.burglary, 'assault':crime.assault,'vandalism':crime.vandalism, 
                 'robbery':crime.robbery, 'arrest':crime.arrest, 'other':crime.other, 'theft':crime.theft}
 
@@ -57,7 +48,6 @@ class Direct_Crime_UtilityIndex:
 @UtilityIndex.create('tangent', {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'teachstu':1, 'unexp':1})
 class School_UtilityIndex: 
     def execute(self, household, *args, school, **kwargs): 
-#        school = {key:value for key, value in average_records_generator(*schools.values())}
         return {'gradulation':school.graduation_rate, 'reading':school.reading_rate, 'math':school.math_rate, 'ap':school.ap_enrollment, 
                 'teachstu':school.teacher_student_ratio, 'unexp':school.inexperience_ratio, 'sat':school.avgsat_score, 'act':school.avgact_score} 
 

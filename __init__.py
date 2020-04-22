@@ -8,6 +8,7 @@ Created on Sun Feb 23 2020
 
 import sys
 import numpy as np
+from itertools import chain
 
 import tables as tbls
 from tables.transformations import Reduction
@@ -37,10 +38,9 @@ FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'yearoccupied
 HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
 POPULATION_TABLES = {'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race'}
 HOUSING_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'sqft':'#st|geo|sqft', 'commute':'#pop|geo|~cmte'}
-SIZE_TABLES = {'sqft':'#st|geo|sqft'}
-CRIME_TABLES = {'crime':'#ct|geo|crime'}
-SCHOOLS_TABLES = {'sat':'%sat|geo|schlvl@student', 'act':'%act|geo|schlvl@student', 'grad':'%grad|geo|schlvl@student', 'ap':'%ap|geo|schlvl@student', 
-                  'math':'%math|geo|schlvl@student', 'read':'%read|geo|schlvl@student', 'exp':'%exp|geo|schlvl@teacher', 'ts':'%pop|geo|schlvl'}        
+#CRIME_TABLES = {'crime':'#ct|geo|crime'}
+#SCHOOLS_TABLES = {'sat':'%sat|geo|schlvl@student', 'act':'%act|geo|schlvl@student', 'grad':'%grad|geo|schlvl@student', 'ap':'%ap|geo|schlvl@student', 
+#                  'math':'%math|geo|schlvl@student', 'read':'%read|geo|schlvl@student', 'exp':'%exp|geo|schlvl@teacher', 'ts':'%pop|geo|schlvl'}        
                   
 calculations = process()
 summation = Reduction(how='summation', by='summation')
@@ -65,9 +65,13 @@ def main(*args, geography, date, history, **kwargs):
     rates = {'wealth':WEALTH_RATE, 'discount':DISCOUNTRATE, 'risk':RISKTOLERANCE}
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
-    
-    table = arraytable('#st|geo|unit', *args, geography=geography, date=date, **kwargs)
-    print(table)
+     
+    for table in chain(RATE_TABLES.values()):
+        table = arraytable(table, *args, geography=geography, dates=history, **kwargs)
+        print(table)    
+    for table in chain(FINANCE_TABLES.values(), HOUSEHOLD_TABLES.values(), POPULATION_TABLES.values(), HOUSING_TABLES.values()):
+        table = arraytable(table, *args, geography=geography, date=date, **kwargs)
+        print(table) 
                        
 
 if __name__ == '__main__':  

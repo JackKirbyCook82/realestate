@@ -32,12 +32,6 @@ DISCOUNTRATE = 0.03
 RISKTOLERANCE = 2
 AGES = {'adulthood':15, 'retirement':65, 'death':95}
 
-#RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgrent@renter'}
-#FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'yearoccupied':'#st|geo|~yrocc'}
-#HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
-#POPULATION_TABLES = {'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race', 'english':'#pop|geo|eng', 'incomelevel':''}
-#HOUSING_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'sqft':'#st|geo|sqft', 'commute':'#pop|geo|~cmte'}
-
 calculations = process()
 summation = Reduction(how='summation', by='summation')
 arraytable = lambda tableID, *args, **kwargs: calculations[tableID](*args, **kwargs)
@@ -61,15 +55,10 @@ def main(*args, geography, date, history, **kwargs):
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
      
-    table = arraytable('#hh|geo|~inc', *args, geography=geography, date=date, **kwargs)
-    print(table)
-    #for table in chain(RATE_TABLES.values()):
-    #    table = arraytable(table, *args, geography=geography, dates=history, **kwargs)
-    #    print(table)    
-    #for table in chain(FINANCE_TABLES.values(), HOUSEHOLD_TABLES.values(), POPULATION_TABLES.values(), HOUSING_TABLES.values()):
-    #    table = arraytable(table, *args, geography=geography, date=date, **kwargs)
-    #    print(table) 
-                       
+    #table = arraytable('', *args, geography=geography, date=date, **kwargs)
+    #table = arraytable('', *args, geography=geography, dates=history, **kwargs)
+    #print(table)
+                  
 
 if __name__ == '__main__':  
     tbls.set_options(linewidth=100, maxrows=40, maxcolumns=10, threshold=100, precision=2, fixednotation=True, framechar='=')

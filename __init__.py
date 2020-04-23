@@ -8,15 +8,14 @@ Created on Sun Feb 23 2020
 
 import sys
 import numpy as np
-from itertools import chain
 
 import tables as tbls
 from tables.transformations import Reduction
 from variables import Geography, Date
 from parsers import ListParser, DictParser
 from utilities.inputparsers import InputParser
+from uscensus import renderer, process, variables
 
-from realestate.feed import process, variables, renderer
 from realestate.economy import School, Bank, Broker
 from realestate.households import Household
 from realestate.housing import Housing
@@ -33,18 +32,14 @@ DISCOUNTRATE = 0.03
 RISKTOLERANCE = 2
 AGES = {'adulthood':15, 'retirement':65, 'death':95}
 
-RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgrent@renter'}
-FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'yearoccupied':'#st|geo|~yrocc'}
-HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
-POPULATION_TABLES = {'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race'}
-HOUSING_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'sqft':'#st|geo|sqft', 'commute':'#pop|geo|~cmte'}
-#CRIME_TABLES = {'crime':'#ct|geo|crime'}
-#SCHOOLS_TABLES = {'sat':'%sat|geo|schlvl@student', 'act':'%act|geo|schlvl@student', 'grad':'%grad|geo|schlvl@student', 'ap':'%ap|geo|schlvl@student', 
-#                  'math':'%math|geo|schlvl@student', 'read':'%read|geo|schlvl@student', 'exp':'%exp|geo|schlvl@teacher', 'ts':'%pop|geo|schlvl'}        
-                  
+#RATE_TABLES = {'income':'Δ%avginc', 'value':'Δ%avgval@owner', 'rent':'Δ%avgrent@renter'}
+#FINANCE_TABLES = {'income':'#hh|geo|~inc', 'value':'#hh|geo|~val', 'yearoccupied':'#st|geo|~yrocc'}
+#HOUSEHOLD_TABLES = {'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
+#POPULATION_TABLES = {'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'race':'#pop|geo|race', 'english':'#pop|geo|eng', 'incomelevel':''}
+#HOUSING_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'rooms':'#st|geo|~rm', 'bedrooms':'#st|geo|~br', 'sqft':'#st|geo|sqft', 'commute':'#pop|geo|~cmte'}
+
 calculations = process()
 summation = Reduction(how='summation', by='summation')
-
 arraytable = lambda tableID, *args, **kwargs: calculations[tableID](*args, **kwargs)
 histtable = lambda table: summation(table, axis='geography').squeeze('geography').tohistogram()
 rate = lambda table: np.average(table.arrays[table.datakeys[0]])
@@ -66,12 +61,14 @@ def main(*args, geography, date, history, **kwargs):
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
      
-    for table in chain(RATE_TABLES.values()):
-        table = arraytable(table, *args, geography=geography, dates=history, **kwargs)
-        print(table)    
-    for table in chain(FINANCE_TABLES.values(), HOUSEHOLD_TABLES.values(), POPULATION_TABLES.values(), HOUSING_TABLES.values()):
-        table = arraytable(table, *args, geography=geography, date=date, **kwargs)
-        print(table) 
+    table = arraytable('#hh|geo|~inc', *args, geography=geography, date=date, **kwargs)
+    print(table)
+    #for table in chain(RATE_TABLES.values()):
+    #    table = arraytable(table, *args, geography=geography, dates=history, **kwargs)
+    #    print(table)    
+    #for table in chain(FINANCE_TABLES.values(), HOUSEHOLD_TABLES.values(), POPULATION_TABLES.values(), HOUSING_TABLES.values()):
+    #    table = arraytable(table, *args, geography=geography, date=date, **kwargs)
+    #    print(table) 
                        
 
 if __name__ == '__main__':  

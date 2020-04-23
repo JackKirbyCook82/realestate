@@ -26,16 +26,16 @@ class Consumption_UtilityIndex:
         return {'consumption':consumption}
 
 
-@UtilityIndex.create('rtangent', {'poverty':3, 'nonliving':2, 'race':1, 'education':2, 'homeless':3, 'trailerpark':1})
+@UtilityIndex.create('rtangent', {'poverty':3, 'nonliving':2, 'race':1, 'education':2, 'nonstructure':3, 'trailerpark':1})
 class Indirect_Crime_UtilityIndex:
     def execute(self, household, *args, crimeproxy, **kwargs):
         poverty = crimeproxy.incomelevel['Poverty'] / crimeproxy.incomelevel.total()
         nonliving = crimeproxy.incomelevel['NonLiving'] / crimeproxy.incomelevel.total()
         race = (crimeproxy.race['Black'] + crimeproxy.race['Other']) / crimeproxy.race.total()
         education = (crimeproxy.education['GradeSchool'] + crimeproxy.education['Uneducated']) / crimeproxy.education.total()
-        homeless = crimeproxy.unit['Vehicle'] / crimeproxy.education.total()
+        nonstructure = crimeproxy.unit['Vehicle'] / crimeproxy.education.total()
         trailerpark = crimeproxy.unit['Mobile'] / crimeproxy.education.total()
-        return {'poverty':poverty, 'nonliving':nonliving, 'race':race, 'education':education, 'homeless':homeless, 'trailerpark':trailerpark}
+        return {'poverty':poverty, 'nonliving':nonliving, 'race':race, 'education':education, 'nonstructure':nonstructure, 'trailerpark':trailerpark}
 
 
 @UtilityIndex.create('inverted', {'shooting':3, 'arson':3, 'burglary':3, 'assault':2, 'vandalism':2, 'robbery':2, 'arrest':1, 'other':1, 'theft':1})
@@ -45,8 +45,20 @@ class Direct_Crime_UtilityIndex:
                 'robbery':crime.robbery, 'arrest':crime.arrest, 'other':crime.other, 'theft':crime.theft}
 
 
+@UtilityIndex.create('tangent', {'language':1, 'education':1, 'race':1, 'english':3, 'income':2, 'value':2})
+class Indirect_School_UtilityIndex:
+    def execute(self, household, *args, schoolproxy, **kwargs):
+        language = schoolproxy.language['English'] / schoolproxy.language.total()
+        education = schoolproxy.education.xdev('Graduate')
+        race = schoolproxy.race.xdev('Asian')
+        english = schoolproxy.english.xdev('Fluent')
+        income = schoolproxy.income.mean() / schoolproxy.income.max()
+        value = schoolproxy.value.mean() / schoolproxy.income.max()
+        return {'language':language, 'education':education, 'race':race, 'english':english, 'income':income, 'value':value}
+
+
 @UtilityIndex.create('tangent', {'graduation':1, 'reading':1, 'math':1, 'ap':1, 'sat':1, 'act':1, 'teachstu':1, 'unexp':1})
-class School_UtilityIndex: 
+class Direct_School_UtilityIndex: 
     def execute(self, household, *args, school, **kwargs): 
         return {'gradulation':school.graduation_rate, 'reading':school.reading_rate, 'math':school.math_rate, 'ap':school.ap_enrollment, 
                 'teachstu':school.teacher_student_ratio, 'unexp':school.inexperience_ratio, 'sat':school.avgsat_score, 'act':school.avgact_score} 

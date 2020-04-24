@@ -8,21 +8,11 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
-from utilities.fields import concept, layer
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ['Housing']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
-
-
-Crime = concept('crime', ['shooting', 'arson', 'burglary', 'assault', 'vandalism', 'robbery', 'arrest', 'other', 'theft'])
-School = concept('school', ['graduation_rate', 'reading_rate', 'math_rate', 'ap_enrollment', 'avgsat_score', 'avgact_score', 'student_density', 'inexperience_ratio'])
-Space = concept('space', ['sqft', 'bedrooms', 'rooms'])
-Quality = concept('quality', ['yearbuilt'])
-Proximity = layer('proximity', ['commute'])
-Community = layer('community', ['race', 'language', 'education', 'age', 'children'])
 
 
 class Housing(ntuple('Housing', 'unit geography sqftcost crimes schools space community proximity quality')):
@@ -40,7 +30,10 @@ class Housing(ntuple('Housing', 'unit geography sqftcost crimes schools space co
     @property
     def count(self): return self.__count  
     
-    def __new__(cls, *args, age, **kwargs):      
+    def __new__(cls, *args, age, **kwargs):    
+        assert hasattr(kwargs['quality'], 'yearbuilt')
+        assert hasattr(kwargs['space'], 'sqft')
+        assert hasattr(kwargs['space'], 'unit')
         instance = super().__new__(cls, **{field:kwargs[field] for field in cls._fields})
         if hash(instance) in cls.__instances: 
             cls.__instances[hash(instance)].count += 1
@@ -66,6 +59,8 @@ class Housing(ntuple('Housing', 'unit geography sqftcost crimes schools space co
     def year(self): return self.quality.yearbuilt
     @property
     def sqft(self): return self.space.sqft
+    @property
+    def unit(self): return self.space.unit
     
     @property
     def price(self): return self.__sqftprice * self.sqft      

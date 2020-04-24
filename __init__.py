@@ -16,7 +16,7 @@ from parsers import ListParser, DictParser
 from utilities.inputparsers import InputParser
 from uscensus import renderer, process, variables
 
-from realestate.economy import School, Bank, Broker
+from realestate.economy import School, Bank, Broker, Environment
 from realestate.households import Household
 from realestate.housing import Housing
 
@@ -27,11 +27,12 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-WEALTH_RATE = 0.05
-DISCOUNTRATE = 0.03
-RISKTOLERANCE = 2
 AGES = {'adulthood':15, 'retirement':65, 'death':95}
-
+RATES = {'income':'Δ%avginc|geo', 'value':'Δ%avgval|geo@owner', 'rent':'Δ%avgrent|geo@renter', 'wealth':0.05, 'discount':0.03, 'risk':2}
+HOUSEHOLDS = {'income':'#hh|geo|~inc', 'equity':'#hh|geo|~val', 'value':'#hh|geo|~val@owner', 'rent':'#hh|geo|~rent@renter', 'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'child':'#hh|geo|child'}
+STRUCTURES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'bedrooms':'#st|geo|~br', 'rooms':'#st|geo|~rm', 'sqft':'#st|geo|sqft', 'yearoccupied':'#st|geo|~yrocc'}
+POPULATION = {'poverty':'#pop|geo|inclvl', 'race':'#pop|geo|race', 'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'english':'#pop|geo|eng', 'communte':'#pop|geo|~cmte'}
+              
 calculations = process()
 summation = Reduction(how='summation', by='summation')
 arraytable = lambda tableID, *args, **kwargs: calculations[tableID](*args, **kwargs)
@@ -51,14 +52,14 @@ def main(*args, geography, date, history, **kwargs):
     graduate = School('gradudate', cost=75000, duration=10, basis='year')
 
     broker = Broker(commisions=0.03)
-    rates = {'wealth':WEALTH_RATE, 'discount':DISCOUNTRATE, 'risk':RISKTOLERANCE}
     education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
     banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
-     
-    #table = arraytable('', *args, geography=geography, date=date, **kwargs)
-    #table = arraytable('', *args, geography=geography, dates=history, **kwargs)
-    #print(table)
-                  
+#    rates = {key:(value if isinstance(value, (float, int)) else arraytable(value, *args, geography=geography, dates=history, **kwargs)) for key, value in RATES.items()}
+#    population = {key:arraytable(value, *args, geography=geography, date=date, **kwargs) for key, value in POPULATION.items()}
+#    households = {key:arraytable(value, *args, geography=geography, date=date, **kwargs) for key, value in HOUSEHOLDS.items()}
+#    structures = {key:arraytable(value, *args, geography=geography, date=date, **kwargs) for key, value in STRUCTURES.items()}
+#    environment = Environment(rates=rates, education=education, banks=banks, broker=broker, population=population, households=households, structures=structures)
+ 
 
 if __name__ == '__main__':  
     tbls.set_options(linewidth=100, maxrows=40, maxcolumns=10, threshold=100, precision=2, fixednotation=True, framechar='=')

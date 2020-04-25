@@ -29,7 +29,7 @@ class DeceasedHouseholderError(Exception): pass
 
 class Household(ntuple('Household', 'age race language education children size')):
     ages = {'adulthood':15, 'retirement':65, 'dealth':95}
-    stringformat = 'Household|{age}YRS {education} {race}-{origin} w/{size}PPL speaking {lanuguage} {children}'       
+    stringformat = 'Household|{age}YRS {education} {race} w/{size}PPL speaking {lanuguage} {children}'       
     concepts = {} 
     
     @classmethod

@@ -15,7 +15,7 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-class Housing(ntuple('Housing', 'unit geography sqftcost crimes schools space community proximity quality')):
+class Housing(ntuple('Housing', 'unit geography sqftcost rentrate valuerate crimes schools space community proximity quality')):
     stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase'       
     concepts = {} 
     

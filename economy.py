@@ -7,9 +7,9 @@ Created on Sun Feb 23 2020
 """
 
 import numpy as np
+from numbers import Number
 from scipy.interpolate import interp1d
 from scipy.linalg import cholesky, eigh
-from itertools import chain
 from collections import namedtuple as ntuple
 
 from utilities.strings import uppercase
@@ -26,6 +26,8 @@ _yearrate =  {'year': lambda rate: float(rate), 'month': lambda rate: float(pow(
 _yearduration = {'year': lambda duration: int(duration), 'month': lambda duration: int(duration * 12)}
 _monthrate = {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
 _monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
+_aslist = lambda items: [items] if isinstance(items, Number) else items
+_asarray = lambda items: np.array(_aslist(items))
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 _curve = lambda x, y, z: interp1d(x, y, kind='linear', bounds_error=False, fill_value=(y[np.argmin(x)], z)) 
 
@@ -38,11 +40,20 @@ _financingcost = lambda x, r: x * (1 + r)
 @keydispatcher
 def curve(method, x, y, *args, **kwargs): raise KeyError(method)
 @curve.register('average')
-def average(x, y, w, *args, **kwargs): return _curve(x, y, np.average(y, weights=_normalize(w) if w else None))
+def average(x, y, *args, weights=None, **kwargs): return _curve(x, y, np.average(y, weights=_normalize(weights) if weights else None))
 @curve.register('last')
 def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
+
+
+class Rate(ntuple('Rate', 'x y')):
+    def __new__(cls, *args, x, y, **kwargs):
+        assert len(_aslist(x)) == len(_aslist(y))
+        return super().__new__(cls, _asarray(x), _asarray(y))
         
-        
+    def __init__(self, *args, method='average', **kwargs): self.__curve = curve(method, self.x, self.y, *args, **kwargs)
+    def __call__(self, x): return self.__curve(x)
+
+    
 class Loan(ntuple('Loan', 'type balance rate duration')):
     stringformat = 'Loan|{type} ${balance} for {duration}MO @{rate}%/MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
@@ -79,7 +90,7 @@ class School(ntuple('Education', 'type cost duration')):
         return super().__new__(cls, *args, duration=_monthduration[basis](duration), **kwargs) 
 
     
-class Bank(ntuple('bank', 'type rate duration financing coverage loantovalue')):
+class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
     stringformat = 'Bank|{type} providing {rate}%/MO for {duration}MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))      

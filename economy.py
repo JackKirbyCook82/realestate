@@ -9,7 +9,6 @@ Created on Sun Feb 23 2020
 import numpy as np
 from numbers import Number
 from scipy.interpolate import interp1d
-from scipy.linalg import cholesky, eigh
 from collections import namedtuple as ntuple
 
 from utilities.strings import uppercase
@@ -17,7 +16,7 @@ from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Broker', 'Loan', 'School', 'Bank']
+__all__ = ['Rate', 'Broker', 'Loan', 'School', 'Bank']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -104,51 +103,7 @@ class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
     def cost(self, amount): return _financingcost(amount, self.financing)
 
 
-class Environment(object):
-    def __init__(self, *args, rates, banks, education, broker, population, households, structures, **kwargs):
-        assert isinstance(broker, Broker)
-        assert all([isinstance(school, School) for school in education.values()])
-        assert all([isinstance(bank, Bank) for bank in banks.values()])
 
-
-#class MonteCarlo(object):
-#    __instances = {}
-#    def __new__(cls, *args, geography, date, **kwargs):
-#        key = hash((cls.__name__, hash(date), hash(geography),))
-#        instance = cls.__instances.get(key, super().__new__(cls))
-#        if key not in cls.__instances.keys(): cls.__instances[key] = instance
-#        return instance
-#
-#    def __init__(self, tables, *args, **kwargs):
-#        self.__tables = {key:gettable(tableID, *args, **kwargs) for key, tableID in self.tableIDs.items()}
-#        self.__correlationmatrix = np.zero((len(self), len(self)))
-#        np.fill_diagonal(self.__correlationmatrix, 1)
-#        
-#    def __call__(self, size, *args, **kwargs):
-#        if 'geography' in kwargs.keys(): tables = {key:table[{'geography':kwargs['geography']}] for key, table in self.__tables.items()}
-#        else: tables = {key:self.summation(table, *args, axis='geography', weights=self.__weights, **kwargs) for key, table in self.__tables.items()}
-#        tables = {key:table.tohistorgram() for key, table in tables.items()}
-#        concepts = ODict([(table.axiskey, table.concepts) for table in tables.values()])
-#        keys = [table.axiskey for table in tables.values()]
-#        samplematrix = self.__samplematrix(tables, size, *args, **kwargs)                      
-#        
-#    def __samplematirx(self, tables, size, *args, method='cholesky', **kwargs):
-#        samplematrix = np.array([table(size) for table in tables.values()]) 
-#        if method == 'cholesky':
-#            correlation_matrix = cholesky(self.__correlationmatrix, lower=True)
-#        elif method == 'eigen':
-#            evals, evecs = eigh(self.__correlationmatrix)
-#            correlation_matrix = np.dot(evecs, np.diag(np.sqrt(evals)))
-#        else: raise ValueError(method)
-#        return np.dot(correlation_matrix, samplematrix).transpose()    
-    
-    
-    
-    
-    
-    
-    
-    
     
     
     

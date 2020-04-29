@@ -61,7 +61,7 @@ class Household(ntuple('Household', 'age race language education children size')
         return '\n'.join([self.stringformat.format(**contents), str(self.__financials)])    
     
     def __init__(self, *args, financials, utility, **kwargs): self.__utility, self.__financials = utility, financials          
-    def __hash__(self): return hash((self.__class__.__name__, self.age, self.race, self.origin, self.language, self.education, self.children, self.size, hash(self.__utility), hash(self.__financials),))
+    def __hash__(self): return hash((self.__class__.__name__, self.age, self.race, self.language, self.education, self.children, self.size, hash(self.__utility), hash(self.__financials),))
     def __getitem__(self, key): return self.todict()[key]
     def todict(self): return self._asdict()
 

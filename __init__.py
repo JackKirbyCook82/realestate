@@ -12,7 +12,7 @@ import tables as tbls
 from variables import Geography, Date
 from parsers import ListParser, DictParser
 from utilities.inputparsers import InputParser
-from uscensus import process
+from uscensus import process, renderer
 
 from realestate.feed import Feed, Environment
 from realestate.economy import Bank, School, Broker
@@ -34,8 +34,8 @@ POPULATION_TABLES = {'poverty':'#pop|geo|inclvl', 'race':'#pop|geo|race', 'educa
 
 HOUSEHOLD_SAMPLES = ['age', 'education', 'income', 'equity', 'yearoccupied', 'race', 'language', 'children', 'size']
 HOUSING_SAMPLES = ['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt']
-HOUSING_LAYERS = ['income', 'value', 'poverty', 'education', 'race', 'unit', 'language', 'english', 'children', 'commute']
-    
+HOUSING_DISTRIBUTIONS = ['income', 'value', 'poverty', 'education', 'race', 'unit', 'language', 'english', 'children', 'commute'] 
+
 mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
 studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
 debt_bank = Bank('debt', rate=0.25, duration=3, basis='year')
@@ -50,26 +50,31 @@ broker = Broker(commisions=0.03)
 education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
 banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
  
-rate_feed = Feed('rates', **RATE_TABLES)
-household_feed = Feed('households', **HOUSEHOLD_TABLES)
-structure_feed = Feed('structures', **STRUCTURE_TABLES)
-population_feed = Feed('population', **POPULATION_TABLES)
+calculations = process()
+rate_feed = Feed('rates', calculations, renderer, **RATE_TABLES)
+household_feed = Feed('households', calculations, renderer, **HOUSEHOLD_TABLES)
+structure_feed = Feed('structures', calculations, renderer, **STRUCTURE_TABLES)
+population_feed = Feed('population', calculations, renderer, **POPULATION_TABLES)
                  
 
-def main(*inputArgs, geography, date, geographies, history, **inputParms):     
-    rate_tables = rate_feed(*inputArgs, geography=geographies, dates=history, **inputParms)
-    histogram_tables = household_feed(*inputArgs, geography=geographies, dates=[date], **inputParms) 
-    histogram_tables.update(structure_feed(*inputArgs, geography=geographies, dates=[date], **inputParms))
-    histogram_tables.update(population_feed(*inputArgs, geography=geographies, dates=[date], **inputParms))
-    
-    environment = Environment(rates={**RATES, **rate_tables}, histograms=histogram_tables)
-    environment(*inputArgs, geography=geography, date=date, **inputParms)
-    
-    
-    
-    
-    
+def calculate(*inputArgs, date, geographies, history, **inputParms):     
+    rate_feed(*inputArgs, geography=geographies, dates=history, **inputParms) 
+    household_feed(*inputArgs, geography=geographies, date=date, **inputParms) 
+    structure_feed(*inputArgs, geography=geographies, date=date, **inputParms) 
+    population_feed(*inputArgs, geography=geographies, date=date, **inputParms)
 
+def generator(*inputArgs, geography, date, **inputParms):
+    for key, table in rate_feed(geography=geography): yield key, table
+    for feed in (household_feed, structure_feed, population_feed):
+        for key, table in feed(geography=geography, date=date): yield key, table
+    
+def main(*inputArgs, **inputParms):
+    calculate(*inputArgs, **inputParms)    
+    environment = Environment('kern|tract#003224', **{key:table for key, table in generator(*inputArgs, **inputParms)})
+    
+    
+    
+    
 if __name__ == '__main__':  
     tbls.set_options(linewidth=100, maxrows=40, maxcolumns=10, threshold=100, precision=2, fixednotation=True, framechar='=')
     tbls.show_options() 
@@ -78,11 +83,12 @@ if __name__ == '__main__':
     geography_parser = lambda item: Geography(dictparser(item))
     history_parser = lambda items: [Date.fromstr(item) for item in listparser(items)]
     date_parser = lambda item: Date.fromstr(item) if item else None
-    variable_parsers = {'geography':geography_parser, 'history':history_parser, 'date':date_parser}
+    variable_parsers = {'geography':geography_parser, 'geographies':geography_parser, 'history':history_parser, 'date':date_parser}
     inputparser = InputParser(assignproxy='=', spaceproxy='_', parsers=variable_parsers)    
     
     print(repr(inputparser))    
-    sys.argv.extend(['geography=state|6,county|29,tract|*', 
+    sys.argv.extend(['geography=state|6,county|29,tract|003204',
+                     'geographies=state|6,county|29,tract|*',
                      'date=2018',
                      'history=2018,2017,2016,2015,2014'])
     inputparser(*sys.argv[1:])  

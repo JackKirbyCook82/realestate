@@ -13,34 +13,62 @@ from collections import OrderedDict as ODict
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['MonteCarlo']
+__all__ = ['Feed', 'Environment', 'MonteCarlo']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-#class Feed(object):
-#    
-#    
-#    @property
-#    def histograms(self): return list(self.__histogramIDs.keys())
-#    @property
-#    def rates(self): return list(self.__rateIDs.keys())    
-#    
-#    def __init__(self, process, histogramIDs={}, rateIDs={}):
-#        self.__histogramIDs = histogramIDs
-#        self.__rateIDs = rateIDs
-#        self.__calculations = process()
-#
-#    def getArrayTable(self, tableID, *args, **kwargs): return self.__calculations[tableID](*args, **kwargs)
-#    def getHistTable(self, table, *args, date, geography, **kwargs): 
-#        return self.getArrayTable(self.__histogramIDs[table], *args, **kwargs).sel(geography=geography, date=date).squeeze('geography').squeeze('date')    
-#    def getRateTable(self, table, *args, geography, **kwargs): 
-#        return self.getArrayTable(self.__rateIDs[table], *args, **kwargs).sel(geography=geography).squeeze('geography')
-#
-#    def __call__(self, *args, date, geography, **kwargs):
-#        histograms = {table:self.getHistTable(table, *args, date, geography, **kwargs) for table in self.histograms}
-#        rates = {table:self.getRateTable(table, *args, date, geography, **kwargs) for table in self.rates}
-#        return {**histograms, **rates}
+_aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
+_filterempty = lambda items: [item for item in _aslist(items) if item]
+
+
+class FeedNotCalculatedError(Exception): pass
+class InconsistentEnvironmentError(Exception): pass
+
+
+class Feed(object):    
+    @property
+    def name(self): return self.__name
+    @property
+    def calculated(self): return self.__calculated
+    
+    def __repr__(self): return '{}(name={}, calculation={}, renderer={})'.format(self.__class__.__name__, self.__name, repr(self.__calculations), repr(self.__renderer))  
+    def __init__(self, name, calculation, renderer, **tables): 
+        self.__name = name
+        self.__calculation = calculation
+        self.__renderer = renderer
+        self.__queue = tables
+        self.__tables = {}
+        self.__calculated = False
+
+    def calculate(self, *args, geography, dates, **kwargs):
+        dates = _filterempty(_aslist(dates) + _aslist(kwargs.pop('date', [])))
+        for tableKey, tableID in self.__queue.items():
+            print(self.__renderer(self.__calculations[tableID]))
+            self.__tables[tableKey] = self.__calculations[tableID](*args, geography=geography, dates=dates, **kwargs)
+        self.__calculated = True
+
+    def __call__(self, *args, geography, date=None, **kwargs):
+        if not self.calculated: raise FeedNotCalculatedError(repr(self))
+        tables = {tableKey:table.sel(geography=geography).squeeze('geography') for tableKey, table in self.__tables.items()}
+        if date: tables = {tableKey:table.sel(date=date).squeeze('date') for tableKey, table in tables.items()}    
+        return {tableKey:table.tohistogram() for tableKey, table in tables.items()}
+
+
+class Environment(object):   
+    @property
+    def name(self): return self.__name
+    @property
+    def geography(self): return self.__geographuy
+    @property
+    def date(self): return self.__date
+    
+    def __repr__(self): return '{}(name={}, geography={}, date={})'.format(self.__class__.__name__, self.__name, repr(self.__geography), repr(self.__date))  
+    def __init__(self, name, **tables): 
+        self.__name, self.__tables = name, tables
+        self.__geography, self.__date = list(tables.values())[0].scope['geography'], list(tables.values())[0].scope['date'] 
+        if not all([table.scope['geography'] == self.__geography for table in tables.values()]): raise InconsistentEnvironmentError(repr(self))
+        if not all([table.scope['date'] == self.__date for table in tables.values()]): raise InconsistentEnvironmentError(repr(self))
         
 
 class MonteCarlo(object):

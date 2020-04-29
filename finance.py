@@ -6,7 +6,6 @@ Created on Sun Feb 23 2020
 
 """
 
-import numpy as np
 from collections import namedtuple as ntuple
 
 __version__ = "1.0.0"

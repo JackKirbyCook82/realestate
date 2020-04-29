@@ -7,12 +7,12 @@ Created on Sun Feb 23 2020
 """
 
 import numpy as np
-from numbers import Number
 from scipy.interpolate import interp1d
+from numbers import Number
 from collections import namedtuple as ntuple
 
-from utilities.strings import uppercase
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
+from utilities.strings import uppercase
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -26,7 +26,6 @@ _yearduration = {'year': lambda duration: int(duration), 'month': lambda duratio
 _monthrate = {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
 _monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
 _aslist = lambda items: [items] if isinstance(items, Number) else items
-_asarray = lambda items: np.array(_aslist(items))
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 _curve = lambda x, y, z: interp1d(x, y, kind='linear', bounds_error=False, fill_value=(y[np.argmin(x)], z)) 
 
@@ -44,15 +43,18 @@ def average(x, y, *args, weights=None, **kwargs): return _curve(x, y, np.average
 def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
 
 
-class Rate(ntuple('Rate', 'x y')):
-    def __new__(cls, *args, x, y, **kwargs):
-        assert len(_aslist(x)) == len(_aslist(y))
-        return super().__new__(cls, _asarray(x), _asarray(y))
-        
-    def __init__(self, *args, method='average', **kwargs): self.__curve = curve(method, self.x, self.y, *args, **kwargs)
+class Rate(object): 
+    def __init__(self, curve): self.__curve = curve
     def __call__(self, x): return self.__curve(x)
-
     
+    @classmethod
+    def fromvalues(cls, x, y, *args, method='average', **kwargs): return curve(method, x, y, *args, **kwargs)
+    @classmethod
+    def frompoint(cls, x, y, *args, **kwargs): return curve('last', [x, x], [y, y], *args, **kwargs)
+    @classmethod
+    def fromcurve(cls, curve, *args, **kwargs): return cls(curve)    
+
+
 class Loan(ntuple('Loan', 'type balance rate duration')):
     stringformat = 'Loan|{type} ${balance} for {duration}MO @{rate}%/MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    

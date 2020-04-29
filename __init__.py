@@ -14,8 +14,8 @@ from parsers import ListParser, DictParser
 from utilities.inputparsers import InputParser
 from uscensus import process, renderer
 
-from realestate.feed import Feed, Environment
-from realestate.economy import Bank, School, Broker
+from realestate.feed import Feed, environment
+from realestate.economy import Bank, School, Broker, Rate
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -32,9 +32,24 @@ HOUSEHOLD_TABLES = {'income':'#hh|geo|~inc', 'equity':'#hh|geo|~val', 'value':'#
 STRUCTURE_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'bedrooms':'#st|geo|~br', 'rooms':'#st|geo|~rm', 'sqft':'#st|geo|sqft', 'yearoccupied':'#st|geo|~yrocc'}
 POPULATION_TABLES = {'poverty':'#pop|geo|inclvl', 'race':'#pop|geo|race', 'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'english':'#pop|geo|eng', 'communte':'#pop|geo|~cmte'}
 
-HOUSEHOLD_SAMPLES = ['age', 'education', 'income', 'equity', 'yearoccupied', 'race', 'language', 'children', 'size']
-HOUSING_SAMPLES = ['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt']
-HOUSING_DISTRIBUTIONS = ['income', 'value', 'poverty', 'education', 'race', 'unit', 'language', 'english', 'children', 'commute'] 
+calculations = process()
+rate_feed = Feed('rates', calculations, renderer, **RATE_TABLES)
+household_feed = Feed('households', calculations, renderer, **HOUSEHOLD_TABLES)
+structure_feed = Feed('structures', calculations, renderer, **STRUCTURE_TABLES)
+population_feed = Feed('population', calculations, renderer, **POPULATION_TABLES)                     
+                     
+HOUSEHOLDS = ['age', 'education', 'income', 'equity', 'yearoccupied', 'race', 'language', 'children', 'size']
+HOUSING = ['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt']
+CRIME = ['incomelevel', 'race', 'education', 'unit']
+SCHOOL = {'language', 'education', 'race', 'english', 'income', 'value'}
+PROXIMITY = {'commute'}
+COMMUNITY = ['race', 'language', 'children', 'age', 'education']
+RATES = ['income', 'value', 'rent']
+
+histograms = {'crime':CRIME, 'school':SCHOOL, 'proximity':PROXIMITY, 'community':COMMUNITY}
+curves = {'rates':RATES}
+samples = {'households':HOUSEHOLDS, 'housing':HOUSING}
+Environment = environment('Property', histograms=histograms, curves=curves, samples=samples)
 
 mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
 studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
@@ -50,12 +65,6 @@ broker = Broker(commisions=0.03)
 education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
 banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
  
-calculations = process()
-rate_feed = Feed('rates', calculations, renderer, **RATE_TABLES)
-household_feed = Feed('households', calculations, renderer, **HOUSEHOLD_TABLES)
-structure_feed = Feed('structures', calculations, renderer, **STRUCTURE_TABLES)
-population_feed = Feed('population', calculations, renderer, **POPULATION_TABLES)
-                 
 
 def calculate(*inputArgs, date, geographies, history, **inputParms):     
     rate_feed(*inputArgs, geography=geographies, dates=history, **inputParms) 
@@ -67,12 +76,12 @@ def generator(*inputArgs, geography, date, **inputParms):
     for key, table in rate_feed(geography=geography): yield key, table
     for feed in (household_feed, structure_feed, population_feed):
         for key, table in feed(geography=geography, date=date): yield key, table
+
     
-def main(*inputArgs, **inputParms):
-    calculate(*inputArgs, **inputParms)    
-    environment = Environment('kern|tract#003224', **{key:table for key, table in generator(*inputArgs, **inputParms)})
-    
-    
+def main(*inputArgs, geography, date, **inputParms):
+    calculate(*inputArgs, geography, date, **inputParms)    
+    tables = {key:table for key, table in generator(*inputArgs, geography=geography, date=date, **inputParms)}
+    environment = Environment(geography=geography, date=date, **tables)    
     
     
 if __name__ == '__main__':  

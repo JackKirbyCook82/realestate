@@ -33,11 +33,11 @@ STRUCTURE_TABLES = {'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'bedroo
 POPULATION_TABLES = {'poverty':'#pop|geo|inclvl', 'race':'#pop|geo|race', 'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'english':'#pop|geo|eng', 'communte':'#pop|geo|~cmte'}
 
 calculations = process()
-rate_feed = Feed('rates', calculations, renderer, **RATE_TABLES)
-household_feed = Feed('households', calculations, renderer, **HOUSEHOLD_TABLES)
-structure_feed = Feed('structures', calculations, renderer, **STRUCTURE_TABLES)
-population_feed = Feed('population', calculations, renderer, **POPULATION_TABLES)                     
-                     
+rate_feed = Feed(calculations, renderer, **RATE_TABLES)
+household_feed = Feed(calculations, renderer, **HOUSEHOLD_TABLES)
+structure_feed = Feed(calculations, renderer, **STRUCTURE_TABLES)
+population_feed = Feed(calculations, renderer, **POPULATION_TABLES)     
+
 HOUSEHOLDS = ['age', 'education', 'income', 'equity', 'yearoccupied', 'race', 'language', 'children', 'size']
 HOUSING = ['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt']
 CRIME = ['incomelevel', 'race', 'education', 'unit']
@@ -66,22 +66,22 @@ education = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates'
 banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
  
 
-def calculate(*inputArgs, date, geographies, history, **inputParms):     
-    rate_feed(*inputArgs, geography=geographies, dates=history, **inputParms) 
-    household_feed(*inputArgs, geography=geographies, date=date, **inputParms) 
-    structure_feed(*inputArgs, geography=geographies, date=date, **inputParms) 
-    population_feed(*inputArgs, geography=geographies, date=date, **inputParms)
+def calculate(*inputArgs, geography, date, geographies, history, **inputParms):     
+    rate_feed.calculate(*inputArgs, geography=geographies, dates=history, **inputParms) 
+    household_feed.calculate(*inputArgs, geography=geographies, dates=date, **inputParms) 
+    structure_feed.calculate(*inputArgs, geography=geographies, dates=date, **inputParms) 
+    population_feed.calculate(*inputArgs, geography=geographies, dates=date, **inputParms)
 
-def generator(*inputArgs, geography, date, **inputParms):
-    for key, table in rate_feed(geography=geography): yield key, table
-    for feed in (household_feed, structure_feed, population_feed):
-        for key, table in feed(geography=geography, date=date): yield key, table
+#def generator(*inputArgs, geography, date, **inputParms):
+#    for key, table in rate_feed(geography=geography): yield key, table
+#    for feed in (household_feed, structure_feed, population_feed):
+#        for key, table in feed(geography=geography, date=date): yield key, table
 
-    
+
 def main(*inputArgs, geography, date, **inputParms):
-    calculate(*inputArgs, geography, date, **inputParms)    
-    tables = {key:table for key, table in generator(*inputArgs, geography=geography, date=date, **inputParms)}
-    environment = Environment(geography=geography, date=date, **tables)    
+    calculate(*inputArgs, geography=geography, date=date, **inputParms)    
+#    tables = {key:table for key, table in generator(*inputArgs, geography=geography, date=date, **inputParms)}
+#    environment = Environment(geography=geography, date=date, **tables)    
     
     
 if __name__ == '__main__':  
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     inputparser = InputParser(assignproxy='=', spaceproxy='_', parsers=variable_parsers)    
     
     print(repr(inputparser))    
-    sys.argv.extend(['geography=state|6,county|29,tract|003204',
+    sys.argv.extend(['geography=state|6,county|29,tract|3204',
                      'geographies=state|6,county|29,tract|*',
                      'date=2018',
                      'history=2018,2017,2016,2015,2014'])

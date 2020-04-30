@@ -39,29 +39,36 @@ def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])
 
 
 class FeedNotCalculatedError(Exception): pass
+class FeedAlreadyCalculatedError(Exception): pass
+
+
 class Feed(object):
     @property
     def calculated(self): return self.__calculated
 
-    def __init__(self, calculation, renderer, **tables): 
-        self.__calculation = calculation
+    def __init__(self, calculations, renderer, **tables): 
+        self.__calculations = calculations
         self.__renderer = renderer
         self.__queue = tables
         self.__tables = {}
         self.__calculated = False    
         
     def calculate(self, *args, geography, dates, **kwargs):
-        dates = _filterempty(_aslist(dates) + _aslist(kwargs.pop('date', [])))
+        if self.calculated: raise FeedNotCalculatedError()        
         for tableKey, tableID in self.__queue.items():
-            print(self.__renderer(self.__calculations[tableID]))
-            self.__tables[tableKey] = self.__calculations[tableID](*args, geography=geography, dates=dates, **kwargs)
+            print(self.__renderer(self.__calculations[tableID]), '\n')
+            self.__tables[tableKey] = self.__calculations[tableID](*args, geography=geography, dates=_aslist(dates), **kwargs)
         self.__calculated = True        
 
-    def __call__(self, *args, geography, date=None, **kwargs):
-        if not self.calculated: raise FeedNotCalculatedError(repr(self))
-        tables = {tableKey:table.sel(geography=geography).squeeze('geography') for tableKey, table in self.__tables.items()}
-        if date: tables = {tableKey:table.sel(date=date).squeeze('date') for tableKey, table in tables.items()}    
-        return {tableKey:table.tohistogram() for tableKey, table in tables.items()}
+    def __iter__(self):
+        if not self.calculated: raise FeedAlreadyCalculatedError()
+        for table in self.__tables.values(): yield table
+
+#    def __call__(self, *args, geography, date=None, **kwargs):
+#        if not self.calculated: raise FeedNotCalculatedError()
+#        tables = {tableKey:table.sel(geography=geography).squeeze('geography') for tableKey, table in self.__tables.items()}
+#        if date: tables = {tableKey:table.sel(date=date).squeeze('date') for tableKey, table in tables.items()}    
+#        return {tableKey:table.tohistogram() for tableKey, table in tables.items()}
 
 
 class Environment(ntuple('Environment', 'histograms curves')):

@@ -8,96 +8,72 @@ Created on Mon Apr 27 2020
 
 import numpy as np
 import pandas as pd
-from scipy.interpolate import interp1d
 from scipy.linalg import cholesky, eigh
 from collections import OrderedDict as ODict
-from collections import namedtuple as ntuple
 
-from utilities.strings import uppercase
-from utilities.concepts import concept
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
+from utilities.concepts import concept
+from utilities.strings import uppercase
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['environment']
+__all__ = ['Feed', 'MonteCarlo', 'create_environment']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
 _filterempty = lambda items: [item for item in _aslist(items) if item]
-_normalize = lambda items: np.array(items) / np.sum(np.array(items))
-_curve = lambda x, y, z: interp1d(x, y, kind='linear', bounds_error=False, fill_value=(y[np.argmin(x)], z)) 
-
-
-@keydispatcher
-def curve(method, x, y, *args, **kwargs): raise KeyError(method)
-@curve.register('average')
-def average(x, y, *args, weights=None, **kwargs): return _curve(x, y, np.average(y, weights=_normalize(weights) if weights else None))
-@curve.register('last')
-def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
-
-
-class FeedNotCalculatedError(Exception): pass
-class FeedAlreadyCalculatedError(Exception): pass
 
 
 class Feed(object):
-    @property
-    def calculated(self): return self.__calculated
-
-    def __init__(self, calculations, renderer, **tables): 
+    def __init__(self, calculations, renderer, **tables):
         self.__calculations = calculations
         self.__renderer = renderer
-        self.__queue = tables
-        self.__tables = {}
-        self.__calculated = False    
-        
-    def calculate(self, *args, geography, dates, **kwargs):
-        if self.calculated: raise FeedNotCalculatedError()        
-        for tableKey, tableID in self.__queue.items():
+        self.__tables = tables
+
+    def __call__(self, *args, geography, **kwargs):
+        dates = set(_filterempty(_aslist(kwargs.pop('date', None)) + _aslist(kwargs.pop('dates', []))))
+        tables = {}
+        for tableKey, tableID in self.__tables.items():
             print(self.__renderer(self.__calculations[tableID]), '\n')
-            self.__tables[tableKey] = self.__calculations[tableID](*args, geography=geography, dates=_aslist(dates), **kwargs)
-        self.__calculated = True        
-
-    def __iter__(self):
-        if not self.calculated: raise FeedAlreadyCalculatedError()
-        for table in self.__tables.values(): yield table
-
-#    def __call__(self, *args, geography, date=None, **kwargs):
-#        if not self.calculated: raise FeedNotCalculatedError()
-#        tables = {tableKey:table.sel(geography=geography).squeeze('geography') for tableKey, table in self.__tables.items()}
-#        if date: tables = {tableKey:table.sel(date=date).squeeze('date') for tableKey, table in tables.items()}    
-#        return {tableKey:table.tohistogram() for tableKey, table in tables.items()}
+            tables[tableKey] = self.__calculations[tableID](*args, geography=geography, dates=dates, **kwargs)            
+        return tables
 
 
-class Environment(ntuple('Environment', 'histograms curves')):
-    @property
-    def geography(self): return self.__geography
-    @property
-    def date(self): return self.__date    
-    
-    def __init__(self, *args, geography, date, **kwargs):                
-        self.__geography = geography
-        self.__date = date
-        
-    def sample(self, key): return MonteCarlo(**self.histograms[key])    
-    def curves(self, key, *args, method, **kwargs): return {curve(method, curvetable.xvalues, curvetable.yvalues, *args, **kwargs) for curvetable in self.curves[key].values()}
-    def concept(self, key): 
-        if key in self.histograms.keys(): return concept(key, fields=list(self.histograms[key].keys()))(**self.histograms[key])
-        elif key in self.curves.keys(): return concept(key, fields=list(self.curves[key].keys()))(**self.curves[key])
-        else: raise KeyError(key)    
-        
-    
-def environment(name, *args, histograms, curves, **kwargs):
-    def __new__(cls, *args, **kwargs):
-        function = lambda fields: {field:kwargs.get(field, None) for field in fields}
-        return super().__new__(cls, function(cls.histogram_fields), function(cls.curve_fields), function(cls.sample_fields))
-    
+def create_environment(name, **concepts):    
     name = ''.join([uppercase(name), Environment.__name__])
     bases = (Environment,)
-    attrs = {'__new__':__new__, 'histogram_fields':histograms, 'curve_fields':curves}
-    return type(name, bases, attrs)
+    attrs = {'concepts':{name:concepts(name, fields) for name, fields in concepts.items()}}
+    return type(name, bases, attrs)    
+
+
+class Environment(object):
+    concepts = {}
+    def __init__(self, **tables):         
+        assert all([list(tables.values())[0].headers['geography'] == table.headers['geography'] for table in list(tables.values())[1:]])
+        assert all([list(tables.values())[0].headers['date'] == table.headers['date'] for table in list(tables.values())[1:]])
+        self.__tables = tables
+
+    def getTables(self, tableKey, *args, axes=[], axis=None, **kwargs):
+        axes = _filterempty(_aslist(axes) + _aslist(axis))
+        scope = {key:kwargs.pop(key) for key in self.__tables[tableKey].headerkeys if key not in _aslist(axes)}
+        table = self.__tables[tableKey].sel(**scope)
+        for scopekey in scope.keys(): table.squeeze(scopekey)
+        return table            
+    
+    def getHistogram(self, tableKey, *args, **kwargs): return self.getTable(tableKey, *args, axis=tableKey, **kwargs).tohistogram(*args, **kwargs)    
+    def getCurve(self, tableKey, *args, **kwargs): return self.getTable(tableKey, *args, axis=tableKey, **kwargs).tocurve(*args, **kwargs)         
+    def getConcept(self, conceptKey, *args, astype='histogram', **kwargs): return self.__getConcept(astype, conceptKey, *args, **kwargs)
+    
+    @keydispatcher
+    def __getConcept(self, conceptType, conceptKey, *args, **kwargs): pass
+    @__getConcept.register('histogram')
+    def __getHistogramConcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.getHistogram(field, *args, axis=field, **kwargs) for field in self.concept[conceptKey].fields})
+    @__getConcept.register('curve')
+    def __getCurveConcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.getCurve(field, *args, axis=field, **kwargs) for field in self.concept[conceptKey].fields})
+    @__getConcept.register('array')
+    def __getArrayConcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.getTables(field, *args, **kwargs) for field in self.concept[conceptKey].fields})
 
 
 class MonteCarlo(object):

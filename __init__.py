@@ -41,9 +41,10 @@ COMMUNITY = ['race', 'language', 'children', 'age', 'education']
 RATES = ['income', 'value', 'rent']
 
 calculations = process()
-property_feed = Feed(calculations, renderer, **HOUSEHOLD_TABLES, **STRUCTURE_TABLES, **POPULATION_TABLES)   
-rate_feed = Feed(calculations, renderer, **RATE_TABLES)
-Environment = create_environment('property', households=HOUSEHOLDS, housing=HOUSING, crime=CRIME, school=SCHOOL, proximity=PROXIMITY, community=COMMUNITY, rates=RATES)
+marketfeed = Feed(calculations, renderer, **HOUSEHOLD_TABLES, **STRUCTURE_TABLES, **POPULATION_TABLES)   
+ratefeed = Feed(calculations, renderer, **RATE_TABLES)
+MarketEnvironment = create_environment('market', households=HOUSEHOLDS, housing=HOUSING, crime=CRIME, school=SCHOOL, proximity=PROXIMITY, community=COMMUNITY)
+RateEnvironment = create_environment('rate', rates=RATES)
 
 mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
 studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
@@ -61,13 +62,11 @@ banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':de
  
 
 def main(*inputArgs, geography, date, history, **inputParms):
-    households = MonteCarlo(property_environment.getHistogram('households', *inputArgs, **inputParms))
-    housing = MonteCarlo(property_environment.getHistogram('housing', *inputArgs, **inputParms))
-    crime = property_environment.getConcept('crime', *inputArgs, **inputParms)
-    school = property_environment.getConcept('school', *inputArgs, **inputParms)
-    proximity = property_environment.getConcept('proximity', *inputArgs, **inputParms)
-    community = property_environment.getConcept('community', *inputArgs, **inputParms)
-    rates = rate_environment.getConcept('rates', *inputArgs, astype='curve', **inputParms)
+    pass
+#    with MarketEnvironment(marketfeed(*inputArgs, geography=geography, date=date, **inputParms)) as marketenvironment:
+#        pass   
+#    with RateEnvironment(ratefeed(*inputArgs, geography=geography, dates=history, **inputParms)) as rateenvironment:
+#        pass
 
     
 if __name__ == '__main__':  

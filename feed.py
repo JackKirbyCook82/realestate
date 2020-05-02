@@ -32,48 +32,70 @@ class Feed(object):
         self.__renderer = renderer
         self.__tables = tables
 
-    def __call__(self, *args, geography, **kwargs):
+    def __call__(self, *args, geography, **kwargs): 
         dates = set(_filterempty(_aslist(kwargs.pop('date', None)) + _aslist(kwargs.pop('dates', []))))
-        tables = {}
-        for tableKey, tableID in self.__tables.items():
-            print(self.__renderer(self.__calculations[tableID]), '\n')
-            tables[tableKey] = self.__calculations[tableID](*args, geography=geography, dates=dates, **kwargs)            
-        return tables
+        return self.__gettables(*args, geography=geography, dates=dates, **kwargs)
+       
+    def __getitem__(self, tableKey):
+        def wrapper(*args, geography, **kwargs): 
+            dates = set(_filterempty(_aslist(kwargs.pop('date', None)) + _aslist(kwargs.pop('dates', []))))
+            return self.__gettable(self.__tables[tableKey], *args, geography=geography, dates=dates, **kwargs)
+        return wrapper
+
+    def __gettables(self, *args, **kwargs):
+        return {tableKey:self.__gettable(tableID, *args, **kwargs) for tableKey, tableID in self.__tables.items()}
+    
+    def __gettable(self, tableID, *args, **kwargs):
+        print(self.__renderer(self.__calculations[tableID]), '\n')
+        return self.__calculations[tableID](*args, **kwargs)            
 
 
 def create_environment(name, **concepts):    
     name = ''.join([uppercase(name), Environment.__name__])
     bases = (Environment,)
-    attrs = {'concepts':{name:concepts(name, fields) for name, fields in concepts.items()}}
+    attrs = {'concepts':{name:concept(name, fields) for name, fields in concepts.items()}}
     return type(name, bases, attrs)    
 
 
 class Environment(object):
     concepts = {}
-    def __init__(self, **tables):         
-        assert all([list(tables.values())[0].headers['geography'] == table.headers['geography'] for table in list(tables.values())[1:]])
-        assert all([list(tables.values())[0].headers['date'] == table.headers['date'] for table in list(tables.values())[1:]])
+    def __init__(self, **tables):    
+        self.__geography = list(tables.values())[0].headers['geography'] 
+        self.__date = list(tables.values())[0].headers['date']        
+        assert all([self.__geography == table.headers['geography'] for table in tables.values()])
+        assert all([self.__date == table.headers['date'] for table in tables.values()])
         self.__tables = tables
 
-    def getTables(self, tableKey, *args, axes=[], axis=None, **kwargs):
-        axes = _filterempty(_aslist(axes) + _aslist(axis))
-        scope = {key:kwargs.pop(key) for key in self.__tables[tableKey].headerkeys if key not in _aslist(axes)}
-        table = self.__tables[tableKey].sel(**scope)
-        for scopekey in scope.keys(): table.squeeze(scopekey)
-        return table            
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
     
-    def getHistogram(self, tableKey, *args, **kwargs): return self.getTable(tableKey, *args, axis=tableKey, **kwargs).tohistogram(*args, **kwargs)    
-    def getCurve(self, tableKey, *args, **kwargs): return self.getTable(tableKey, *args, axis=tableKey, **kwargs).tocurve(*args, **kwargs)         
-    def getConcept(self, conceptKey, *args, astype='histogram', **kwargs): return self.__getConcept(astype, conceptKey, *args, **kwargs)
-    
-    @keydispatcher
-    def __getConcept(self, conceptType, conceptKey, *args, **kwargs): pass
-    @__getConcept.register('histogram')
-    def __getHistogramConcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.getHistogram(field, *args, axis=field, **kwargs) for field in self.concept[conceptKey].fields})
-    @__getConcept.register('curve')
-    def __getCurveConcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.getCurve(field, *args, axis=field, **kwargs) for field in self.concept[conceptKey].fields})
-    @__getConcept.register('array')
-    def __getArrayConcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.getTables(field, *args, **kwargs) for field in self.concept[conceptKey].fields})
+    def __iter__(self): pass
+
+    def __getitem__(self, conceptKey):
+        def wrapper(*args, **kwargs):
+            fields = self.concepts[conceptKey].fields
+            concept =  self.concepts[conceptKey](**{field:self.__getTable(field, *args, axis=field, **kwargs) for field in fields})
+        return wrapper
+
+#    def __getTables(self, tableKey, *args, axes=[], axis=None, **kwargs):
+#        axes = _filterempty(_aslist(axes) + _aslist(axis))
+#        scope = {key:kwargs.pop(key) for key in self.__tables[tableKey].headerkeys if key not in _aslist(axes)}
+#        table = self.__tables[tableKey].sel(**scope)
+#        for scopekey in scope.keys(): table.squeeze(scopekey)
+#        return table            
+#    
+#    def __getHistogram(self, tableKey, *args, **kwargs): return self.__getTable(tableKey, *args, axis=tableKey, **kwargs).tohistogram(*args, **kwargs)    
+#    def __getCurve(self, tableKey, *args, **kwargs): return self.__getTable(tableKey, *args, axis=tableKey, **kwargs).tocurve(*args, **kwargs)         
+#    def __getConcept(self, conceptKey, *args, astype='histogram', **kwargs): return self.__getConcept(astype, conceptKey, *args, **kwargs)
+#    
+#    @keydispatcher
+#    def __getconcept(self, conceptType, conceptKey, *args, **kwargs): pass
+#    @__getConcept.register('histogram')
+#    def __gethistogramconcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.__getHistogram(field, *args, axis=field, **kwargs) for field in self.concept[conceptKey].fields})
+#    @__getConcept.register('curve')
+#    def __getcurveconcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.__getCurve(field, *args, axis=field, **kwargs) for field in self.concept[conceptKey].fields})
+#    @__getConcept.register('array')
+#    def __getarrayconcept(self, conceptKey, *args, **kwargs): return self.concepts[conceptKey](**{field:self.__getTables(field, *args, **kwargs) for field in self.concept[conceptKey].fields})
 
 
 class MonteCarlo(object):

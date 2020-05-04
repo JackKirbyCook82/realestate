@@ -10,7 +10,7 @@ from collections import namedtuple as ntuple
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Housing']
+__all__ = ['createHousing', 'Housing']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -78,7 +78,8 @@ class Housing(ntuple('Housing', 'geography unit sqftcost rentrate valuerate crim
 #       return cls()    
     
     
-    
+def createHousing(*args, **kwargs):
+    pass
     
     
     

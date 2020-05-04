@@ -44,19 +44,23 @@ def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])
 
 
 class Rate(object): 
-    def __init__(self, curve): self.__curve = curve
+    def __init__(self, curve, *args, basis='year', **kwargs): 
+        self.__curve = curve
+        self.__basis = basis
+    
     def __call__(self, x): 
-        try: return self.__curve(x)
+        try: y = self.__curve(x)
         except: 
-            try: return self.__curve(x.value)
-            except: return self.__curve(x.index)
+            try: y = self.__curve(x.value)
+            except: y = self.__curve(x.index)
+        return _monthrate[self.__basis](y)
     
     @classmethod
     def fromvalues(cls, x, y, *args, method='average', **kwargs): return curve(method, x, y, *args, **kwargs)
     @classmethod
     def frompoint(cls, x, y, *args, **kwargs): return curve('last', [x, x], [y, y], *args, **kwargs)
     @classmethod
-    def fromcurve(cls, curve, *args, **kwargs): return cls(curve)    
+    def fromcurve(cls, curve, *args, **kwargs): return cls(curve, *args, **kwargs)    
 
 
 class Loan(ntuple('Loan', 'type balance rate duration')):

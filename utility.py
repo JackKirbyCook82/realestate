@@ -10,7 +10,7 @@ from utilities.utility import UtilityIndex, CobbDouglas_UtilityFunction
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Utility']
+__all__ = ['createUtility']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -95,14 +95,15 @@ class Community_UtilityIndex:
         return {'race':race, 'age':age, 'children':children, 'education':education, 'language':language}
   
 
-class Utility(CobbDouglas_UtilityFunction):
-    def create(cls, *args, **kwargs):
-        #utility_index = UtilityIndex(amplitude=1, factor=1, tolerances={})
-        indexes = {}
-        return cls(indexes, amplitude=1, subsistences={}, weights={}, diminishrate=1)   
+#class Utility(CobbDouglas_UtilityFunction):
+#    def create(cls, *args, **kwargs):
+#        #utility_index = UtilityIndex(amplitude=1, factor=1, tolerances={})
+#        indexes = {}
+#        return cls(indexes, amplitude=1, subsistences={}, weights={}, diminishrate=1)   
         
     
-
+def createUtility(*args, **kwargs):
+    pass
 
 
 

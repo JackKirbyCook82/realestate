@@ -8,12 +8,12 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
-from realestate.finance import Financials
-from realestate.utility import Utility
+from realestate.finance import Financials, createFinancials
+from realestate.utility import Utility, createUtility
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Household']
+__all__ = ['createHousehold', 'Household']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -72,7 +72,8 @@ class Household(ntuple('Household', 'age race language education children size')
 #        return cls(age=age, race=race, language=language, education=education, children=children, size=size, financials=financials, utility=utility)
 
         
-    
+def createHousehold(*args, **kwargs):
+    pass
     
     
     

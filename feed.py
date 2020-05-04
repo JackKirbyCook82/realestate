@@ -17,7 +17,7 @@ from utilities.strings import uppercase
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['create_environment', 'Feed', 'Environment', 'MonteCarlo']
+__all__ = ['createEnvironment', 'Environment', 'Feed', 'MonteCarlo']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -52,17 +52,6 @@ class Feed(object):
 
     def __enter__(self, EnvironmentType, *args, **kwargs): return EnvironmentType(**self(*args, **kwargs))
     def __exit__(self, *args): pass
-
-
-def create_environment(name, concepts, functions={}, default=lambda x, *args, **kwargs: x):
-    assert isinstance(concepts, dict)
-    assert isinstance(functions, dict)
-    name = ''.join([uppercase(name), Environment.__name__])
-    bases = (Environment,)
-    concepts = {key:concept(key, fields) for key, fields in concepts.items()}
-    functions = {key:functions.get(key, default) for key in concepts.keys()}
-    attrs = {'__concepts':concepts, '__functions':functions}
-    return type(name, bases, attrs)    
 
 
 class Environment(object):
@@ -105,10 +94,21 @@ class Environment(object):
         return table    
 
     def __getTables(self, tableKeys, *args, **kwargs):
-        for tableKey in _aslist(tableKeys): yield tableKey, self.__getTable(*args, **kwargs)
+        for tableKey in _aslist(tableKeys): yield tableKey, self.__getTable(tableKey, *args, **kwargs)
       
     def __applyFunction(self, conceptKey, table, *args, **kwargs):
         return self.__functions[conceptKey](table, *args, **kwargs)
+ 
+    
+def createEnvironment(name, concepts, functions={}, default=lambda x, *args, **kwargs: x):
+    assert isinstance(concepts, dict)
+    assert isinstance(functions, dict)
+    name = ''.join([uppercase(name), Environment.__name__])
+    bases = (Environment,)
+    concepts = {key:concept(key, fields) for key, fields in concepts.items()}
+    functions = {key:functions.get(key, default) for key in concepts.keys()}
+    attrs = {'__concepts':concepts, '__functions':functions}
+    return type(name, bases, attrs) 
     
 
 class MonteCarlo(object):
@@ -125,7 +125,7 @@ class MonteCarlo(object):
         sampletable = {key:list(values) for key, values in zip(self.keys, samplematrix)}
         return pd.DataFrame({sampletable})               
         
-    def __samplematirx(self, size, *args, method='cholesky', **kwargs):
+    def __samplematrix(self, size, *args, method='cholesky', **kwargs):
         samplematrix = np.array([table(size) for table in self.__tables.values()]) 
         if method == 'cholesky':
             correlation_matrix = cholesky(self.__correlationmatrix, lower=True)

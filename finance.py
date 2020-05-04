@@ -11,7 +11,7 @@ from collections import namedtuple as ntuple
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Financials']
+__all__ = ['createFinancials', 'Financials']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -34,11 +34,11 @@ class UnstableLifeStyleError(Exception): pass
 class ExceededHorizonError(Exception): pass
 
 
-class Financials(ntuple('Financials', 'horizon incomehorizon discountrate risktolerance incomerate valuerate wealthrate income wealth value consumption mortgage studentloan debt')):
+class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskrate incomerate valuerate wealthrate income wealth value consumption mortgage studentloan debt')):
     stringformat = 'Financials|Assets=${assets:.0f}, Debt=${debt:.0f}, Income=${income:.0f}/MO'
     def __str__(self): return self.stringformat(assets=self.wealth + self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance)     
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([field, repr(self[field])]) for field in self._fields]))  
-    def __hash__(self): return hash((self.__class__.__name__, self.horizon, self.incomehorizon, self.discountrate, self.risktolerance, self.incomerate, self.valuerate, self.wealthrate,
+    def __hash__(self): return hash((self.__class__.__name__, self.horizon, self.incomehorizon, self.discountrate, self.riskrate, self.incomerate, self.valuerate, self.wealthrate,
                                      self.income, self.wealth, self.value, self.consumption, hash(self.mortgage), hash(self.studentloan), hash(self.debt),))    
 
     def __new__(cls, horizonduration, incomeduration, *args, targets={}, terminalwealth=0, basis='month', **kwargs):        
@@ -53,14 +53,14 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
         return instance  
 
     @classmethod
-    def __consumption(cls, horizonduration, incomeduration, terminalwealth, *args, discountrate, risktolerance, income, wealth, value, basis='month', **kwargs):
+    def __consumption(cls, horizonduration, incomeduration, terminalwealth, *args, discountrate, riskrate, income, wealth, value, basis='month', **kwargs):
         horizonduration, incomeduration = [_monthduration[basis](kwargs[rate]) for rate in (horizonduration, incomeduration)]   
         wealthrate, incomerate, valuerate = [_monthrate[basis](kwargs[rate]) for rate in ('wealthrate', 'incomerate', 'valuerate')]      
         mortgage, studentloan, debt = [kwargs.get(loan, None) for loan in ('mortgage', 'studentloan', 'debt')]
         w = wealth_factor(wealthrate, horizonduration)
         a = value_factor(valuerate, horizonduration)
         i = income_factor(incomerate, wealthrate, incomeduration)
-        c = consumption_factor(theta(risktolerance, discountrate, wealthrate), wealthrate, horizonduration)
+        c = consumption_factor(theta(riskrate, discountrate, wealthrate), wealthrate, horizonduration)
         m = loan_factor(mortgage.rate, wealthrate, min(horizonduration, mortgage.duration)) if mortgage is not None else 0
         s = loan_factor(studentloan.rate, wealthrate, min(horizonduration, studentloan.duration)) if studentloan is not None else 0
         d = loan_factor(debt.rate, wealthrate, min(horizonduration, debt.duration)) if debt is not None else 0 
@@ -73,7 +73,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
         duration = _monthduration[basis](kwargs[duration])            
         w = wealth_factor(self.wealthrate, duration)        
         i = income_factor(self.incomerate, self.wealthrate, self.incomeduration)
-        c = consumption_factor(theta(self.risktolerance, self.discountrate, self.wealthrate), self.wealthrate, duration)
+        c = consumption_factor(theta(self.riskrate, self.discountrate, self.wealthrate), self.wealthrate, duration)
         m = loan_factor(self.mortgage.rate, self.wealthrate, min(duration, self.mortgage.duration)) if self.mortgage is not None else 0
         s = loan_factor(self.studentloan.rate, self.wealthrate, min(duration, self.studentloan.duration)) if self.studentloan is not None else 0
         d = loan_factor(self.debt.rate, self.wealthrate, min(duration, self.debt.duration)) if self.debt is not None else 0    
@@ -86,7 +86,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
         return a * self.value 
     
     @property
-    def rates(self): return dict(discountrate=self.discountrate, risktolerance=self.risktolerance, wealthrate=self.wealthrate, incomerate=self.incomerate, valuerate=self.valuerate)
+    def rates(self): return dict(discountrate=self.discountrate, riskrate=self.riskrate, wealthrate=self.wealthrate, incomerate=self.incomerate, valuerate=self.valuerate)
     @property
     def loans(self): return dict(mortgage=self.mortgage, studentloan=self.studentloan, debt=self.debt)
     @property
@@ -156,7 +156,8 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
 #        return financials
 
 
-
+def createFinancials(*args, **kwargs):
+    pass
 
 
 

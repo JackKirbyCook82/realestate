@@ -45,7 +45,11 @@ def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])
 
 class Rate(object): 
     def __init__(self, curve): self.__curve = curve
-    def __call__(self, x): return self.__curve(x)
+    def __call__(self, x): 
+        try: return self.__curve(x)
+        except: 
+            try: return self.__curve(x.value)
+            except: return self.__curve(x.index)
     
     @classmethod
     def fromvalues(cls, x, y, *args, method='average', **kwargs): return curve(method, x, y, *args, **kwargs)

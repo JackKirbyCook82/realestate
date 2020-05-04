@@ -8,6 +8,9 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
+from realestate.finance import Financials
+from realestate.utility import Utility
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ['Household']

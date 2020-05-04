@@ -6,6 +6,7 @@ Created on Sun Feb 23 2020
 
 """
 
+import numpy as np
 from collections import namedtuple as ntuple
 
 __version__ = "1.0.0"
@@ -130,6 +131,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskto
 
 #    @classmethod
 #    def create(cls, year, *args, discountrate, risktolerance, age, education, value, yearoccupied, income, ages, schools, economy, banks, **kwargs):
+#        raise Exception()
 #        start_school = schools[education]
 #        start_age = ages['adulthood'] + start_school.duration     
 #        start_year = year - age - start_school.duration    

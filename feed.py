@@ -111,6 +111,11 @@ def createEnvironment(name, concepts, functions={}, default=lambda x, *args, **k
     return type(name, bases, attrs) 
     
 
+def createCompilation(name, fields):
+    Concept = concept(name, fields)
+    
+
+
 class MonteCarlo(object):
     @property
     def keys(self): return list(self.__histtables.keys())

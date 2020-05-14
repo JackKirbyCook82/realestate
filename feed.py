@@ -12,12 +12,12 @@ from itertools import product
 from scipy.linalg import cholesky, eigh
 from collections import OrderedDict as ODict
 
-from utilities.concepts import concept
+from tables.concepts import concept
 from utilities.strings import uppercase
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['createEnvironment', 'Environment', 'Feed', 'MonteCarlo']
+__all__ = ['Feed', 'createConcept', 'createEnvironment']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -37,10 +37,10 @@ class Feed(object):
         dates = set(_filterempty(_aslist(kwargs.pop('date', None)) + _aslist(kwargs.pop('dates', []))))
         return self.__gettables(*args, geography=geography, dates=dates, **kwargs)
        
-    def __getitem__(self, tableKey):
+    def __getitem__(self, key):
         def wrapper(*args, geography, **kwargs): 
             dates = set(_filterempty(_aslist(kwargs.pop('date', None)) + _aslist(kwargs.pop('dates', []))))
-            return self.__gettable(self.__tables[tableKey], *args, geography=geography, dates=dates, **kwargs)
+            return self.__gettable(self.__tables[key], *args, geography=geography, dates=dates, **kwargs)
         return wrapper
 
     def __gettables(self, *args, **kwargs):
@@ -54,17 +54,30 @@ class Feed(object):
     def __exit__(self, *args): pass
 
 
+def createConcept(name, *args, histograms=[], curves=[], **kwargs):
+    assert isinstance(histograms, list) and isinstance(curves, list)
+    return concept(name, histograms=histograms, curves=curves)
+
+
+def createEnvironment(name, *args, concepts={}, **kwargs):
+    assert isinstance(concepts, dict)
+    name = ''.join([uppercase(name), Environment.__name__])
+    bases = (Environment,)
+    attrs = {'__concepts':concepts}
+    return type(name, bases, attrs) 
+
+
 class Environment(object):
     __concepts = {}
-    __functions = {}
-    
-    @classmethod
-    def addconcept(cls, key, fields, function):
-        cls.__concepts[key] = concept(key, fields)
-        cls.__functions[key] = function
-    
+    @property
+    def concepts(self): return self.__concepts   
     @property
     def dimensions(self): return self.__dimensions    
+    
+    def __new__(cls, **tables):
+        if not cls.__concepts: raise NotImplementedError('{}.{}'.format(cls.__name__, '__concepts'))
+        return super().__new__(cls)
+    
     def __init__(self, **tables): 
         self.__tables = tables
         self.__dimensions = self.__getdimensions(**tables)
@@ -78,67 +91,49 @@ class Environment(object):
         assert all([axis in self.dimensions for axis in axes])
         for items in product(*[self.__tables.headers[axis] for axis in axes]): yield items
 
-    def __getitem__(self, conceptKey):
-        def wrapper(*args, **kwargs): return self(conceptKey, *args, **kwargs)  
+    def __getitem__(self, key):
+        assert key in self.concepts.keys()
+        def wrapper(*args, **kwargs): return self(key, *args, **kwargs)  
         return wrapper  
 
-    def __call__(self, conceptKey, *args, **kwargs):
-        tables = {tableKey:self.__applyFunction(conceptKey, table, *args, **kwargs) for tableKey, table in self.__getTables(conceptKey, *args, **kwargs)}
-        return self.__concepts[conceptKey(**tables)]
+    def __call__(self, key, *args, **kwargs):
+        assert key in self.concepts.keys()
+        return self.concepts[key](**self.__getTables(self.concepts[key].fields, *args, **kwargs))
 
-    def __getTable(self, tableKey, *args, axes=[], axis=None, **kwargs):
+    def __getTable(self, field, *args, axes=[], axis=None, **kwargs):
         axes = _filterempty(_aslist(axes) + _aslist(axis))
-        newscope = {key:kwargs.pop(key) for key in self.__tables[tableKey].headerkeys if key not in _aslist(axes)}
-        table = self.__tables[tableKey].sel(**newscope)
+        newscope = {field:kwargs.pop(key) for key in self.__tables[field].headerkeys if key not in _aslist(axes)}
+        table = self.__tables[field].sel(**newscope)
         for scopekey in newscope.keys(): table.squeeze(scopekey)
         return table    
 
-    def __getTables(self, tableKeys, *args, **kwargs):
-        for tableKey in _aslist(tableKeys): yield tableKey, self.__getTable(tableKey, *args, **kwargs)
-      
-    def __applyFunction(self, conceptKey, table, *args, **kwargs):
-        return self.__functions[conceptKey](table, *args, **kwargs)
+    def __getTables(self, fields, *args, **kwargs):
+        return {field:self.__getTable(field, *args, **kwargs) for field in _aslist(fields)}
  
-    
-def createEnvironment(name, concepts, functions={}, default=lambda x, *args, **kwargs: x):
-    assert isinstance(concepts, dict)
-    assert isinstance(functions, dict)
-    name = ''.join([uppercase(name), Environment.__name__])
-    bases = (Environment,)
-    concepts = {key:concept(key, fields) for key, fields in concepts.items()}
-    functions = {key:functions.get(key, default) for key in concepts.keys()}
-    attrs = {'__concepts':concepts, '__functions':functions}
-    return type(name, bases, attrs) 
-    
 
-def createCompilation(name, fields):
-    Concept = concept(name, fields)
-    
-
-
-class MonteCarlo(object):
-    @property
-    def keys(self): return list(self.__histtables.keys())
-    
-    def __init__(self, **tables):
-        self.__tables = ODict([(key, value) for key, value in tables.items()])
-        self.__correlationmatrix = np.zero((len(self), len(self)))
-        np.fill_diagonal(self.__correlationmatrix, 1)
-
-    def __call__(self, size, *args, **kwargs):
-        samplematrix = self.__samplematrix(size, *args, **kwargs)    
-        sampletable = {key:list(values) for key, values in zip(self.keys, samplematrix)}
-        return pd.DataFrame({sampletable})               
-        
-    def __samplematrix(self, size, *args, method='cholesky', **kwargs):
-        samplematrix = np.array([table(size) for table in self.__tables.values()]) 
-        if method == 'cholesky':
-            correlation_matrix = cholesky(self.__correlationmatrix, lower=True)
-        elif method == 'eigen':
-            evals, evecs = eigh(self.__correlationmatrix)
-            correlation_matrix = np.dot(evecs, np.diag(np.sqrt(evals)))
-        else: raise ValueError(method)
-        return np.dot(correlation_matrix, samplematrix).transpose()  
+#class MonteCarlo(object):
+#    @property
+#    def keys(self): return list(self.__histtables.keys())
+#    
+#    def __init__(self, **tables):
+#        self.__tables = ODict([(key, value) for key, value in tables.items()])
+#        self.__correlationmatrix = np.zero((len(self), len(self)))
+#        np.fill_diagonal(self.__correlationmatrix, 1)
+#
+#    def __call__(self, size, *args, **kwargs):
+#        samplematrix = self.__samplematrix(size, *args, **kwargs)    
+#        sampletable = {key:list(values) for key, values in zip(self.keys, samplematrix)}
+#        return pd.DataFrame({sampletable})               
+#        
+#    def __samplematrix(self, size, *args, method='cholesky', **kwargs):
+#        samplematrix = np.array([table(size) for table in self.__tables.values()]) 
+#        if method == 'cholesky':
+#            correlation_matrix = cholesky(self.__correlationmatrix, lower=True)
+#        elif method == 'eigen':
+#            evals, evecs = eigh(self.__correlationmatrix)
+#            correlation_matrix = np.dot(evecs, np.diag(np.sqrt(evals)))
+#        else: raise ValueError(method)
+#        return np.dot(correlation_matrix, samplematrix).transpose()  
 
 
 

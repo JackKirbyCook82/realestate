@@ -14,7 +14,7 @@ from parsers import ListParser, DictParser
 from utilities.inputparsers import InputParser
 from uscensus import process, renderer
 
-from realestate.feed import createEnvironment, Feed, MonteCarlo
+from realestate.feed import Feed, createConcept, createEnvironment
 from realestate.households import createHousehold
 from realestate.housing import createHousing
 from realestate.economy import Bank, School, Broker, Rate
@@ -27,37 +27,39 @@ __license__ = ""
 
 
 AGE_CONSTANTS = {'adulthood':15, 'retirement':65, 'death':95}
-RATE_CONSTANTS = {'wealth':0.05, 'discount':0.03, 'risk':2}
+RATE_CONSTANTS = {'wealthrate':0.05, 'discountrate':0.03, 'riskrate':2}
 
-RATE_TABLES = {'income':'Δ%avginc|geo', 'value':'Δ%avgval|geo@owner', 'rent':'Δ%avgrent|geo@renter'}
+RATE_TABLES = {'incomerate':'Δ%avginc|geo', 'valuerate':'Δ%avgval|geo@owner', 'rentrate':'Δ%avgrent|geo@renter'}
 HOUSEHOLD_TABLES = {'households':'#hh|geo', 'income':'#hh|geo|~inc', 'equity':'#hh|geo|~equity', 'value':'#hh|geo|~val@owner', 'rent':'#hh|geo|~rent@renter', 'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
 STRUCTURE_TABLES = {'structures':'#st|geo', 'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'bedrooms':'#st|geo|~br', 'rooms':'#st|geo|~rm', 'sqft':'#st|geo|sqft', 'yearoccupied':'#st|geo|~yrocc'}
 POPULATION_TABLES = {'population':'#pop|geo', 'incomelevel':'#pop|geo|inclvl', 'race':'#pop|geo|race', 'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'english':'#pop|geo|eng', 'communte':'#pop|geo|~cmte'}
 
-COUNTS = ['households', 'structures', 'population']                     
-HOUSEHOLDS = ['age', 'education', 'income', 'equity', 'value', 'yearoccupied', 'race', 'language', 'children', 'size']
-HOUSINGS = ['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt']
-CRIME = ['incomelevel', 'race', 'education', 'unit']
-SCHOOL = ['language', 'education', 'race', 'english', 'income', 'value']
-PROXIMITY = ['commute']
-COMMUNITY = ['race', 'language', 'children', 'age', 'education']
-RATES = ['income', 'value', 'rent']
-
-tohistogram = lambda table, *args, **kwargs: table.tohistogram(*args, **kwargs)
-tocurve = lambda table, *args, **kwargs: table.tocurve(*args, **kwargs)
-
 calculations = process()
-feed = Feed(calculations, renderer, **HOUSEHOLD_TABLES, **STRUCTURE_TABLES, **POPULATION_TABLES, **RATE_TABLES)   
-concepts = {'counts':COUNTS, 'households':HOUSEHOLDS, 'housings':HOUSINGS, 'crime':CRIME, 'school':SCHOOL, 'proximity':PROXIMITY, 'community':COMMUNITY, 'rates':RATES}
-functions = {item:tocurve for item in RATES}
-Environment = createEnvironment('market', concepts=concepts, functions=functions, default=tohistogram)
+feed = Feed(calculations, renderer, **HOUSEHOLD_TABLES, **STRUCTURE_TABLES, **POPULATION_TABLES, **RATE_TABLES)                        
+  
+concepts = {
+    'count': createConcept('counts', histograms=['households', 'structures', 'population']),
+    'household': createConcept('households', histograms=['age', 'education', 'income', 'equity', 'value', 'yearoccupied', 'race', 'language', 'children', 'size']),
+    'housing': createConcept('housing', histograms=['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt']),
+    'crime': createConcept('crime', histograms=['incomelevel', 'race', 'education', 'unit']),
+    'crimeRace': createConcept('crimeRace', histograms=['race']),
+    'crimeWealth': createConcept('crimeWealth', histograms=['incomelevel']),
+    'school': createConcept('school', histograms=['language', 'education', 'race', 'english', 'income', 'value']),
+    'schoolEducation': createConcept('schoolEducation', histograms=['education']),
+    'schoolEnglish': createConcept('schoolEnglish', histograms=['language', 'english']),
+    'schoolWealth': createConcept('schoolWealth', ['income', 'value']),
+    'proximity': createConcept('proximity', histograms=['commute']),
+    'community': createConcept('community', histograms=['race', 'language', 'children', 'age', 'education']),
+    'rates': createConcept('rates', curves=['incomerate', 'valuerate', 'rentrate'])}
+
+Environment = createEnvironment('market', concepts=concepts)
 
 mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
 studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
 debt_bank = Bank('debt', rate=0.25, duration=3, basis='year')
     
-basic_school = School('basisschool', cost=0, duration=0, basis='year')
-grade_school = School('gradeschool', cost=0, duration=3, basis='year')
+basic_school = School('basic', cost=0, duration=0, basis='year')
+grade_school = School('grade', cost=0, duration=3, basis='year')
 associates = School('associates', cost=25000, duration=5, basis='year')
 bachelors = School('bachelors', cost=50000, duration=7, basis='year')
 graduate = School('gradudate', cost=75000, duration=10, basis='year')
@@ -68,34 +70,38 @@ banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':de
 
 
 def createHouseholds(environment, *inputArgs, date, **inputParms):
-    counts = environment['counts'](date=date)['households']
-    for geography in environment.iterate('geography'):
-        households = MonteCarlo(**environment['households'](geography=geography, basis='year', date=date).todict())
-        incomerate = Rate.fromcurve(environment['income'](geography=geography, basis='year', method='average'))(date)
-        valuerate = Rate.fromcurve(environment['value'](geography=geography), basis='year', method='average')(date)
-        wealthrate = Rate.frompoint(RATE_CONSTANTS['wealth'], basis='year')(date)
-        discountrate = Rate.frompoint(RATE_CONSTANTS['discount'], basis='year')(date)
-        riskrate = Rate.frompoint(RATE_CONSTANTS['risk'], basis='year')(date)
-        meta = dict(geography=geography, date=date)
-        content = dict(incomerate=incomerate, valuerate=valuerate, wealthrate=wealthrate, discountrate=discountrate, riskrate=riskrate)
-        for index, values in households(counts[geography]).iterrows(): 
-            yield createHousehold(horizon=5, **values.to_dict(), **content, **meta, broker=broker, education=education, banks=banks)
+    pass
+
+#    counts = environment['counts'](date=date)['households']
+#    for geography in environment.iterate('geography'):
+#        households = MonteCarlo(**environment['households'](geography=geography, basis='year', date=date).todict())
+#        incomerate = Rate.fromcurve(environment['income'](geography=geography, basis='year', method='average'))(date)
+#        valuerate = Rate.fromcurve(environment['value'](geography=geography), basis='year', method='average')(date)
+#        wealthrate = Rate.frompoint(RATE_CONSTANTS['wealth'], basis='year')(date)
+#        discountrate = Rate.frompoint(RATE_CONSTANTS['discount'], basis='year')(date)
+#        riskrate = Rate.frompoint(RATE_CONSTANTS['risk'], basis='year')(date)
+#        meta = dict(geography=geography, date=date)
+#        content = dict(incomerate=incomerate, valuerate=valuerate, wealthrate=wealthrate, discountrate=discountrate, riskrate=riskrate)
+#        for index, values in households(counts[geography]).iterrows(): 
+#            yield createHousehold(horizon=5, **values.to_dict(), **content, **meta, broker=broker, education=education, banks=banks)
 
 
 def createHousings(environment, *inputArgs, date, **inputParms):
-    counts = environment['counts'](date=date)['structures']
-    for geography in environment.iterate('geography'):
-        housings = MonteCarlo(**environment['housings'](geography=geography, date=date).todict())
-        crime = environment['crime'](geography=geography, date=date)
-        school = environment['school'](geography=geography, date=date)
-        proximity = environment['proximity'](geography=geography, date=date)
-        community = environment['community'](geography=geography, date=date)    
-        valuerate = Rate.fromcurve(environment['value'](geography=geography), basis='year', method='average')(date)
-        rentrate = Rate.fromcurve(environment['rent'](geography=geography), basis='year', method='average')(date)
-        meta = dict(geography=geography, date=date)
-        content = dict(crime=crime, school=school, proximity=proximity, community=community, valuerate=valuerate, rentrate=rentrate)
-        for index, values in housings(counts[geography]).iterrows(): 
-            yield createHousing(sqftprice=100, sqftrent=1, sqftcost=0.5, **values.to_dict(), **content, **meta, broker=broker, education=education, banks=banks)
+    pass
+
+#    counts = environment['counts'](date=date)['structures']
+#    for geography in environment.iterate('geography'):
+#        housings = MonteCarlo(**environment['housings'](geography=geography, date=date).todict())
+#        crime = environment['crime'](geography=geography, date=date)
+#        school = environment['school'](geography=geography, date=date)
+#        proximity = environment['proximity'](geography=geography, date=date)
+#        community = environment['community'](geography=geography, date=date)    
+#        valuerate = Rate.fromcurve(environment['value'](geography=geography), basis='year', method='average')(date)
+#        rentrate = Rate.fromcurve(environment['rent'](geography=geography), basis='year', method='average')(date)
+#        meta = dict(geography=geography, date=date)
+#        content = dict(crime=crime, school=school, proximity=proximity, community=community, valuerate=valuerate, rentrate=rentrate)
+#        for index, values in housings(counts[geography]).iterrows(): 
+#            yield createHousing(sqftprice=100, sqftrent=1, sqftcost=0.5, **values.to_dict(), **content, **meta, broker=broker, education=education, banks=banks)
         
 
 def main(*inputArgs, **inputParms):

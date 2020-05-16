@@ -8,12 +8,12 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
-from realestate.finance import Financials, createFinancials
-from realestate.utility import Utility, createUtility
+from realestate.finance import createFinancials
+from realestate.utility import createUtility
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['createHousehold', 'Household']
+__all__ = ['createHousehold']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -23,21 +23,24 @@ _monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambd
 _monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
 
 
+# geography, date 
+# horizon 
+# broker, schools, banks
+# age, education, income, equity, value, yearoccupied, race, language, children, size
+# incomerate, valuerate, wealthrate, discountrate, riskrate
+    
+def createHousehold(geography, date, *args, **kwargs):
+    pass
+    
+    
 class PrematureHouseholderError(Exception): pass
 class DeceasedHouseholderError(Exception): pass
- 
+
 
 class Household(ntuple('Household', 'age race language education children size')):
     ages = {'adulthood':15, 'retirement':65, 'dealth':95}
-    stringformat = 'Household|{age}YRS {education} {race} w/{size}PPL speaking {lanuguage} {children}'       
-    concepts = {} 
-    
-    @classmethod
-    def setup(cls, *args, **kwargs): 
-        attrs = {'concepts':kwargs.get('concepts', cls.concepts), 
-                 'stringformat':kwargs.get('stringformat', cls.stringformat), 
-                 'ages':{key:kwargs.get(key, value) for key, value in cls.ages.items()}}
-        return type(cls.__name__, (cls,), attrs)    
+    stringformat = 'Household|{age}YRS {education} {race} w/{size}PPL speaking {lanuguage} {children}'      
+    def __str__(self): return '\n'.join([self.stringformat.format(**{field:getattr(self, field) for field in self._fields}), str(self.__financials)])        
     
     __instances = {} 
     __count = 0
@@ -56,13 +59,9 @@ class Household(ntuple('Household', 'age race language education children size')
             cls.__instances[hash(instance)] = instance
             return instance
     
-    def __str__(self): 
-        contents = {field:self.concepts[field][getattr(self, field)] if field in self.concepts.keys() else getattr(self, field) for field in self._fields}
-        return '\n'.join([self.stringformat.format(**contents), str(self.__financials)])    
-    
     def __init__(self, *args, financials, utility, **kwargs): self.__utility, self.__financials = utility, financials          
     def __hash__(self): return hash((self.__class__.__name__, self.age, self.race, self.language, self.education, self.children, self.size, hash(self.__utility), hash(self.__financials),))
-    def __getitem__(self, key): return self.todict()[key]
+    def __getitem__(self, key): return self.__getattr__(key)
     def todict(self): return self._asdict()
 
 #    @classmethod
@@ -71,14 +70,7 @@ class Household(ntuple('Household', 'age race language education children size')
 #        utility = Utility.create(*args, **kwargs)
 #        return cls(age=age, race=race, language=language, education=education, children=children, size=size, financials=financials, utility=utility)
 
-        
-def createHousehold(*args, **kwargs):
-    pass
-    
-    
-    
-    
-    
+
     
     
     

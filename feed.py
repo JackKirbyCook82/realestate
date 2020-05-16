@@ -6,18 +6,11 @@ Created on Mon Apr 27 2020
 
 """
 
-import numpy as np
-import pandas as pd
 from itertools import product
-from scipy.linalg import cholesky, eigh
-from collections import OrderedDict as ODict
-
-from tables.concepts import concept
-from utilities.strings import uppercase
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Feed', 'createConcept', 'createEnvironment']
+__all__ = ['Feed', 'Environment']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -50,35 +43,18 @@ class Feed(object):
         print(self.__renderer(self.__calculations[tableID]), '\n')
         return self.__calculations[tableID](*args, **kwargs)   
 
-    def __enter__(self, EnvironmentType, *args, **kwargs): return EnvironmentType(**self(*args, **kwargs))
+    def __enter__(self, concepts, *args, **kwargs): return Environment(concepts, **self(*args, **kwargs))
     def __exit__(self, *args): pass
 
 
-def createConcept(name, *args, histograms=[], curves=[], **kwargs):
-    assert isinstance(histograms, list) and isinstance(curves, list)
-    return concept(name, histograms=histograms, curves=curves)
-
-
-def createEnvironment(name, *args, concepts={}, **kwargs):
-    assert isinstance(concepts, dict)
-    name = ''.join([uppercase(name), Environment.__name__])
-    bases = (Environment,)
-    attrs = {'__concepts':concepts}
-    return type(name, bases, attrs) 
-
-
 class Environment(object):
-    __concepts = {}
     @property
     def concepts(self): return self.__concepts   
     @property
     def dimensions(self): return self.__dimensions    
     
-    def __new__(cls, **tables):
-        if not cls.__concepts: raise NotImplementedError('{}.{}'.format(cls.__name__, '__concepts'))
-        return super().__new__(cls)
-    
-    def __init__(self, **tables): 
+    def __init__(self, concepts, **tables): 
+        self.__concepts = concepts
         self.__tables = tables
         self.__dimensions = self.__getdimensions(**tables)
     
@@ -109,31 +85,6 @@ class Environment(object):
 
     def __getTables(self, fields, *args, **kwargs):
         return {field:self.__getTable(field, *args, **kwargs) for field in _aslist(fields)}
- 
-
-#class MonteCarlo(object):
-#    @property
-#    def keys(self): return list(self.__histtables.keys())
-#    
-#    def __init__(self, **tables):
-#        self.__tables = ODict([(key, value) for key, value in tables.items()])
-#        self.__correlationmatrix = np.zero((len(self), len(self)))
-#        np.fill_diagonal(self.__correlationmatrix, 1)
-#
-#    def __call__(self, size, *args, **kwargs):
-#        samplematrix = self.__samplematrix(size, *args, **kwargs)    
-#        sampletable = {key:list(values) for key, values in zip(self.keys, samplematrix)}
-#        return pd.DataFrame({sampletable})               
-#        
-#    def __samplematrix(self, size, *args, method='cholesky', **kwargs):
-#        samplematrix = np.array([table(size) for table in self.__tables.values()]) 
-#        if method == 'cholesky':
-#            correlation_matrix = cholesky(self.__correlationmatrix, lower=True)
-#        elif method == 'eigen':
-#            evals, evecs = eigh(self.__correlationmatrix)
-#            correlation_matrix = np.dot(evecs, np.diag(np.sqrt(evals)))
-#        else: raise ValueError(method)
-#        return np.dot(correlation_matrix, samplematrix).transpose()  
 
 
 

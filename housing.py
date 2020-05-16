@@ -8,22 +8,34 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
+from utilities.concepts import concept
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['createHousing', 'Housing']
+__all__ = ['createHousing']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-class Housing(ntuple('Housing', 'geography unit sqftcost rentrate valuerate crimes schools space community proximity quality')):
-    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase'       
-    concepts = {} 
-    
-    @classmethod
-    def setup(cls, *args, **kwargs): 
-        attrs = {'concepts':kwargs.get('concepts', cls.concepts), 
-                 'stringformat':kwargs.get('stringformat', cls.stringformat)}
-        return type(cls.__name__, (cls,), attrs)    
+# geography, date 
+# sqftprice, sqftrent, sqftcost     
+# unit, bedrooms, rooms, sqft, yearbuilt 
+# crime, school, proximity, commuity 
+# valuerate, rentrate 
+
+def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, **kwargs):    
+    space = Space(unit=unit, bedrooms=bedrooms, rooms=rooms, sqft=sqft)
+    quality = Quality(yearbuilt=yearbuilt)
+    return Housing(*args, geography=geography, space=space, quality=quality, **kwargs)
+
+
+Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'], function=int)
+Quality = concept('quality', ['yearbuilt'], function=int)
+
+
+class Housing(ntuple('Housing', 'geography sqftcost rentrate valuerate crime school space community proximity quality')):
+    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase'      
+    def __str__(self): return self.stringformat.format(**{'unit':self.unit, 'sqft':self.sqft, 'year':self.year, 'geography':str(self.geography), 'rent':self.rentercost, 'price':self.price})       
     
     __instances = {} 
     __count = 0
@@ -42,15 +54,10 @@ class Housing(ntuple('Housing', 'geography unit sqftcost rentrate valuerate crim
             instance.__count += 1
             cls.__instances[hash(instance)] = instance
             return instance
-        
-    def __str__(self): 
-        unit = self.__concepts['unit'][self.unit] if 'unit' in self.__concepts.keys() else self.unit
-        contents = dict(sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price)
-        return self.stringformat.format(unit=unit, **contents)          
-    
+
     def __init__(self, *args, sqftprice, sqftrent, **kwargs): self.__sqftrent, self.__sqftprice = sqftrent, sqftprice     
     def __hash__(self): return hash((self.__class__.__name__, self.unit, hash(self.geography), self.sqftcost, hash(self.crimes), hash(self.schools), hash(self.space), hash(self.community), hash(self.proximity), hash(self.quality),))
-    def __getitem__(self, key): return self.todict()[key]
+    def __getitem__(self, key): return self.__getattr__(key)
     def todict(self): return self._asdict()
     
     @property
@@ -66,23 +73,9 @@ class Housing(ntuple('Housing', 'geography unit sqftcost rentrate valuerate crim
     def ownercost(self): return self.__sqftcost * self.sqft    
     @property
     def rentercost(self): return self.__sqftrent * self.sqft    
+        
     
-#    @classmethod
-#    def create(cls, *args, **kwargs):
-#       crime = Crime(shooting=, arson=, burglary=, assault=, vandalism=, robbery=, arrest=, other=, theft=)
-#       school = School(graduation_rate=, reading_rate=, math_rate=, ap_enrollment=, avgsat_score=, avgact_score=, student_density=, inexperience_ratio=)
-#       space = Space(sqft=, bedrooms=, rooms=)
-#       quality = Quality(yearbuilt=)
-#       proximity = Proximity(commute=)
-#       community = Community(race=, origin=, education=, language=, age=, children=)    
-#       return cls()    
-    
-    
-def createHousing(*args, **kwargs):
-    pass
-    
-    
-    
+
     
     
     

@@ -11,7 +11,7 @@ from collections import namedtuple as ntuple
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['createFinancials', 'Financials']
+__all__ = ['createFinancials']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -28,6 +28,16 @@ consumption_factor = lambda tr, wr, n: pow(1 + tr, n) / (tr - wr)
 loan_factor = lambda lr, wr, n: (lr / wr) * (pow(1 + lr, n) / (1 - pow(1 + lr, n)))
   
 
+# geography, date 
+# horizon 
+# broker, schools, banks
+# age, education, income, equity, value, yearoccupied, race, language, children, size
+# incomerate, valuerate, wealthrate, discountrate, riskrate
+    
+def createFinancials(geography, date, *args, **kwargs):
+    pass
+
+
 class InsufficientFundsError(Exception): pass
 class InsufficientCoverageError(Exception): pass
 class UnstableLifeStyleError(Exception): pass
@@ -37,6 +47,7 @@ class ExceededHorizonError(Exception): pass
 class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskrate incomerate valuerate wealthrate income wealth value consumption mortgage studentloan debt')):
     stringformat = 'Financials|Assets=${assets:.0f}, Debt=${debt:.0f}, Income=${income:.0f}/MO'
     def __str__(self): return self.stringformat(assets=self.wealth + self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance)     
+
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([field, repr(self[field])]) for field in self._fields]))  
     def __hash__(self): return hash((self.__class__.__name__, self.horizon, self.incomehorizon, self.discountrate, self.riskrate, self.incomerate, self.valuerate, self.wealthrate,
                                      self.income, self.wealth, self.value, self.consumption, hash(self.mortgage), hash(self.studentloan), hash(self.debt),))    
@@ -154,10 +165,6 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
 #        financials = financials.buy(purchase_value, bank=banks['mortgage'])
 #        financials = financials.projection(max(age - purchase_age, 0), **economy.rates(year, basis='year'), basis='year')    
 #        return financials
-
-
-def createFinancials(*args, **kwargs):
-    pass
 
 
 

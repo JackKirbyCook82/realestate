@@ -26,16 +26,29 @@ __license__ = ""
 def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, **kwargs):    
     space = Space(unit=unit, bedrooms=bedrooms, rooms=rooms, sqft=sqft)
     quality = Quality(yearbuilt=yearbuilt)
-    return Housing(*args, geography=geography, space=space, quality=quality, **kwargs)
+    return Housing(*args, date=date, geography=geography, space=space, quality=quality, **kwargs)
 
 
 Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'], function=int)
 Quality = concept('quality', ['yearbuilt'], function=int)
 
 
-class Housing(ntuple('Housing', 'geography sqftcost rentrate valuerate crime school space community proximity quality')):
-    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase'      
-    def __str__(self): return self.stringformat.format(**{'unit':self.unit, 'sqft':self.sqft, 'year':self.year, 'geography':str(self.geography), 'rent':self.rentercost, 'price':self.price})       
+class Housing(ntuple('Housing', 'date geography sqftcost rentrate valuerate crime school space community proximity quality')):
+    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase|${cost:.0f}/MO Cost'       
+    def __str__(self): return self.stringformat.format(unit=self.unit, sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price, cost=self.ownercost)  
+    
+    def __repr__(self): 
+        content = {'date':repr(self.date), 'geography':repr(self.geography)} 
+        content.update({'crime':repr(self.crime), 'school':repr(self.school), 'space':repr(self.space), 'community':repr(self.community), 'proximity':repr(self.proximity), 'quality':repr(self.quality)})
+        content.update({field:getattr(self, field) for field in self._fields if field not in content.keys()})
+        content.update({'sqftrent':self.__sqftrent, 'sqftprice':self.__sqftprice})
+        return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
+    
+    def __hash__(self):
+        basis = (hash(self.date), hash(self.geography),)
+        concepts = (hash(self.crime), hash(self.school), hash(self.space), hash(self.community), hash(self.proximity), hash(self.quality),)
+        rates = (self.rentrate, self.valuerate,)
+        return hash((self.__class__.__name__, *basis, *concepts, *rates,))      
     
     __instances = {} 
     __count = 0
@@ -56,7 +69,6 @@ class Housing(ntuple('Housing', 'geography sqftcost rentrate valuerate crime sch
             return instance
 
     def __init__(self, *args, sqftprice, sqftrent, **kwargs): self.__sqftrent, self.__sqftprice = sqftrent, sqftprice     
-    def __hash__(self): return hash((self.__class__.__name__, self.unit, hash(self.geography), self.sqftcost, hash(self.crimes), hash(self.schools), hash(self.space), hash(self.community), hash(self.proximity), hash(self.quality),))
     def __getitem__(self, key): return self.__getattr__(key)
     def todict(self): return self._asdict()
     

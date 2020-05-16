@@ -20,6 +20,16 @@ _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else lis
 _filterempty = lambda items: [item for item in _aslist(items) if item]
 
 
+# geography, date 
+# horizon 
+# broker, schools, banks
+# age, education, income, equity, value, yearoccupied, race, language, children, size
+# incomerate, valuerate, wealthrate, discountrate, riskrate
+
+#def createUtility(*args, **kwargs):
+#    pass
+
+
 @UtilityIndex.register('logarithm', {'consumption':1})
 class Consumption_UtilityIndex: 
     def execute(self, housing, household, *args, **kwargs): 
@@ -81,8 +91,6 @@ class Community_UtilityIndex:
         return {'race':race, 'age':age, 'children':children, 'education':education, 'language':language}
   
 
-def createUtility(*args, **kwargs):
-    pass
 
 
 

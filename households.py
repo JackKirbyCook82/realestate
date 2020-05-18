@@ -18,23 +18,11 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-_aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
-_monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
-_monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
+def createHousehold(geography, date, *args, **kwargs):
+    financials = createFinancials(geography, date, *args, **kwargs)
+    utility = createUtility(geography, date, *args, **kwargs)
+    return Household(*args, geography=geography, date=date, financials=financials, utility=utility, **kwargs)    
 
-
-# geography, date 
-# horizon 
-# broker, schools, banks
-# age, education, income, equity, value, yearoccupied, race, language, children, size
-# incomerate, valuerate, wealthrate, discountrate, riskrate
-    
-#def createHousehold(geography, date, *args, horizon, broker, schools, banks, age, education, income, equity, value, yearoccupied, 
-#                    race, language, children, size, incomerate, valuerate, wealthrate, discountrate, riskrate, **kwargs): 
-#        financials = Financials.create(*args, age=age, education=education, ages=cls.ages, **kwargs)
-#        utility = Utility.create(*args, **kwargs)
-#        return cls(age=age, race=race, language=language, education=education, children=children, size=size, financials=financials, utility=utility    
-    
     
 class PrematureHouseholderError(Exception): pass
 class DeceasedHouseholderError(Exception): pass

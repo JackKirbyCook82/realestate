@@ -21,10 +21,13 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-_yearrate =  {'year': lambda rate: float(rate), 'month': lambda rate: float(pow(rate + 1, 12) - 1)} 
-_yearduration = {'year': lambda duration: int(duration), 'month': lambda duration: int(duration * 12)}
-_monthrate = {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
-_monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
+_convertKeys = ['year', 'month', 'week']
+_convertMatrix = np.array([[1, 12, 52], [-12, 1, 52/12], [-52, -52/12, 1]]) 
+_convertindex = lambda key: _convertKeys.index(key)
+_convertfactor = lambda fromvalue, tovalue: _convertMatrix[_convertindex(fromvalue), _convertindex(tovalue)]
+_convertrate = lambda frombasis, tobasis, rate: pow((1 + rate), _convertfactor(frombasis, tobasis)) - 1
+_convertduration = lambda frombasis, tobasis, duration: duration * _convertfactor(frombasis, tobasis)
+
 _aslist = lambda items: [items] if isinstance(items, Number) else items
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 _curve = lambda x, y, z: interp1d(x, y, kind='linear', bounds_error=False, fill_value=(y[np.argmin(x)], z)) 
@@ -43,17 +46,21 @@ def average(x, y, *args, weights=None, **kwargs): return _curve(x, y, np.average
 def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
 
 
+class Economy(ntuple('Economy', 'geography date rates schools banks broker')):
+    def __new__(cls, geography, date, *args, rates, schools, banks, broker, **kwargs):
+        rates = {key:(Rate.fromcurve(value, *args, **kwargs) if hasattr(value, '__call__') else Rate.frompoint(date.year, value, *args, **kwargs)) for key, value in rates.items()}
+        return super().__new__(cls, geography, date, rates, schools, banks, broker)
+
+
 class Rate(object): 
     def __init__(self, curve, *args, basis='year', **kwargs): 
         self.__curve = curve
         self.__basis = basis
     
-    def __call__(self, x): 
-        try: y = self.__curve(x)
-        except: 
-            try: y = self.__curve(x.value)
-            except: y = self.__curve(x.index)
-        return _monthrate[self.__basis](y)
+    def __call__(self, date, *args, basis='month', **kwargs): 
+        rate = self.__curve(date)
+        factor = _convertrate(self.__basis, basis, date)
+        return pow((1 + rate), factor) - 1
     
     @classmethod
     def fromvalues(cls, x, y, *args, method='average', **kwargs): return curve(method, x, y, *args, **kwargs)
@@ -61,8 +68,8 @@ class Rate(object):
     def frompoint(cls, x, y, *args, **kwargs): return curve('last', [x, x], [y, y], *args, **kwargs)
     @classmethod
     def fromcurve(cls, curve, *args, **kwargs): return cls(curve, *args, **kwargs)    
-
-
+            
+    
 class Loan(ntuple('Loan', 'type balance rate duration')):
     stringformat = 'Loan|{type} ${balance} for {duration}MO @{rate}%/MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
@@ -70,7 +77,7 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     def __hash__(self): return hash((self.__class__.__name__, self.type, self.balance, self.rate, self.duration,))       
     
     def __new__(cls, *args, rate, duration, basis='month', **kwargs): 
-        return super().__new__(cls, *args, _monthrate[basis](rate), _monthduration[basis](duration), **kwargs)   
+        return super().__new__(cls, *args, _convertrate(basis, 'month', rate), _convertduration(basis, 'month', duration), **kwargs)    
     
     @property
     def payment(self): return _payment(self.balance, self.rate, self.duration)
@@ -96,7 +103,7 @@ class School(ntuple('Education', 'type cost duration')):
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))  
     
     def __new__(cls, *args, duration, basis='year', **kwargs): 
-        return super().__new__(cls, *args, duration=_monthduration[basis](duration), **kwargs) 
+        return super().__new__(cls, *args, duration=_convertduration(basis, 'month', duration), **kwargs) 
 
     
 class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
@@ -105,7 +112,8 @@ class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value] for key, value in self._asdict().items())]))      
     
     def __new__(cls, *args, rate, duration, financing=0, coverage=0, loantovalue=1, basis='year', **kwargs): 
-        return super().__new__(cls, *args, rate=_monthrate[basis](rate), duration=_monthduration[basis](duration), financing=financing, coverage=coverage, loantovalue=loantovalue, **kwargs)  
+        rate, duration = _convertrate(basis, 'month', rate), _convertduration(basis, 'month', duration)
+        return super().__new__(cls, *args, rate=rate, duration=duration, financing=financing, coverage=coverage, loantovalue=loantovalue, **kwargs)  
 
     def loan(self, amount): return Loan(self.type, amount, self.rate, self.duration)
     def qualify(self, coverage): return coverage >= self.coverage

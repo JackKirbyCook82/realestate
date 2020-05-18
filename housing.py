@@ -17,16 +17,12 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-# geography, date 
-# sqftprice, sqftrent, sqftcost     
-# unit, bedrooms, rooms, sqft, yearbuilt 
-# crime, school, proximity, commuity 
-# valuerate, rentrate 
-
-def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, **kwargs):    
+def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, economy, **kwargs):    
     space = Space(unit=unit, bedrooms=bedrooms, rooms=rooms, sqft=sqft)
     quality = Quality(yearbuilt=yearbuilt)
-    return Housing(*args, date=date, geography=geography, space=space, quality=quality, **kwargs)
+    rentrate = economy.rates['rent'](date.year) 
+    valuerate = economy.rates['value'](date.year)
+    return Housing(*args, date=date, geography=geography, space=space, quality=quality, rentrate=rentrate, valuerate=valuerate,  **kwargs)
 
 
 Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'], function=int)

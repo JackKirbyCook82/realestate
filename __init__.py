@@ -17,7 +17,8 @@ from utilities.stats import MonteCarlo
 from uscensus import process, renderer
 
 from realestate.feed import Feed
-from realestate.economy import Bank, School, Broker, Rate
+from realestate.economy import Bank, School, Broker, Economy
+from realestate.markets import PropertyMarket
 from realestate.households import createHousehold
 from realestate.housing import createHousing
 
@@ -66,32 +67,26 @@ banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':de
 def createHouseholds(environment, *inputArgs, date, **inputParms):
     count = environment['count'](date=date)['household']
     for geography in environment.iterate('geography'):
-        households = environment['households'](geography=geography, basis='year', date=date)
+        households = environment['households'](geography=geography, date=date)
         sampler = MonteCarlo(**households.todict())
-        incomerate = Rate.fromcurve(environment['income'](geography=geography, basis='year', method='average'))(date)
-        valuerate = Rate.fromcurve(environment['value'](geography=geography), basis='year', method='average')(date)
-        wealthrate = Rate.frompoint(RATE_CONSTANTS['wealth'], basis='year')(date)
-        discountrate = Rate.frompoint(RATE_CONSTANTS['discount'], basis='year')(date)
-        riskrate = Rate.frompoint(RATE_CONSTANTS['risk'], basis='year')(date)
-        content = dict(incomerate=incomerate, valuerate=valuerate, wealthrate=wealthrate, discountrate=discountrate, riskrate=riskrate)
+        rates=dict(wealth=RATE_CONSTANTS['wealth'], discount=RATE_CONSTANTS['discount'], risk=RATE_CONSTANTS['risk'], 
+                   income=environment['income'](geography=geography), value=environment['value'](geography=geography))
+        economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
         for index, values in sampler(count[geography]).iterrows(): 
-            yield createHousehold(geography, date, horizon=5, broker=broker, schools=schools, banks=banks, **values.to_dict(), **content)
+            yield createHousehold(geography, date, horizon=5, economy=economy, **values.to_dict())
 
 
 def createHousings(environment, *inputArgs, date, **inputParms):
     count = environment['count'](date=date)['structure']
     for geography in environment.iterate('geography'):
         housings = environment['housings'](geography=geography, date=date)
-        sampler = MonteCarlo(**housings.todict())
-        crime = environment['crime'](geography=geography, date=date)
-        school = environment['school'](geography=geography, date=date)
-        proximity = environment['proximity'](geography=geography, date=date)
-        community = environment['community'](geography=geography, date=date)    
-        valuerate = Rate.fromcurve(environment['value'](geography=geography), basis='year', method='average')(date)
-        rentrate = Rate.fromcurve(environment['rent'](geography=geography), basis='year', method='average')(date)
-        content = dict(crime=crime, school=school, proximity=proximity, community=community, valuerate=valuerate, rentrate=rentrate)
+        sampler = MonteCarlo(**housings.todict()) 
+        rates = dict(value=environment['value'](geography=geography), rent=environment['rent'](geography=geography))
+        content = dict(crime=environment['crime'](geography=geography, date=date), school=environment['school'](geography=geography, date=date), 
+                       proximity=environment['proximity'](geography=geography, date=date), community=environment['community'](geography=geography, date=date))
+        economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
         for index, values in sampler(count[geography]).iterrows(): 
-            yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, **values.to_dict(), **content)
+            yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values.to_dict(), **content)
         
 
 def main(*inputArgs, **inputParms):

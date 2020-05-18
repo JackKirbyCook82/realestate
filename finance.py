@@ -7,7 +7,6 @@ Created on Sun Feb 23 2020
 """
 
 import numpy as np
-from numbers import Number
 from collections import namedtuple as ntuple
 
 __version__ = "1.0.0"
@@ -17,9 +16,13 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-_monthrate= {'year': lambda rate: float(pow(rate + 1, 1/12) - 1), 'month': lambda rate: float(rate)} 
-_monthduration = {'year': lambda duration: int(duration * 12), 'month': lambda duration: int(duration)}
-_monthflow = {'year': lambda flow: int(flow / 12), 'month': lambda flow: int(flow)}
+_convertKeys = ['year', 'month', 'week']
+_convertMatrix = np.array([[1, 12, 52], [-12, 1, 52/12], [-52, -52/12, 1]]) 
+_convertindex = lambda key: _convertKeys.index(key)
+_convertfactor = lambda fromvalue, tovalue: _convertMatrix[_convertindex(fromvalue), _convertindex(tovalue)]
+_convertrate = lambda frombasis, tobasis, rate: pow((1 + rate), _convertfactor(frombasis, tobasis)) - 1
+_convertduration = lambda frombasis, tobasis, duration: duration * _convertfactor(frombasis, tobasis)
+_convertflow = lambda frombasis, tobasis, duration: duration / _convertfactor(frombasis, tobasis)
 
 theta = lambda risktolerance, discountrate, wealthrate: (wealthrate - discountrate) / risktolerance
 wealth_factor = lambda wr, n: pow(1 + wr, n)
@@ -29,36 +32,31 @@ consumption_factor = lambda tr, wr, n: pow(1 + tr, n) / (tr - wr)
 loan_factor = lambda lr, wr, n: (lr / wr) * (pow(1 + lr, n) / (1 - pow(1 + lr, n)))
   
 
-# geography, date 
-# horizon 
-# broker, schools, banks
-# age, education, income, equity, value, yearoccupied, race, language, children, size
-# incomerate, valuerate, wealthrate, discountrate, riskrate
+def createFinancials(geography, date, *args, horizon, age, education, income, value, yearoccupied, economy, **kwargs): 
+    start_school = economy.schools[education]
+    start_age = economy.ages['adulthood'] + start_school.duration     
+    start_year = date.year - age - start_school.duration    
+    start_income = income / np.prod(np.array([1 + economy.rates['income'](i, basis='year') for i in range(start_year, date.year)]))
+    start_studentloan = economy.banks['studentloan'].loan(start_school.cost)   
+    assert start_age <= age and start_year <= date.year
     
-#def createFinancials(geography, date, *args, horizon, broker, schools, banks, age, education, income, equity, value, yearoccupied, 
-#                     race, language, children, size, incomerate, valuerate, wealthrate, discountrate, riskrate, **kwargs): 
-#        start_school = schools[education]
-#        start_age = ages['adulthood'] + start_school.duration     
-#        start_year = date.year - age - start_school.duration    
-#        start_income = income / np.prod(np.array([1 + economy.incomerate(i, basis='year') for i in range(start_year, date.year)]))
-#        start_studentloan = banks['studentloan'].loan(start_school.cost)   
-#        assert start_age <= age and start_year <= date.year
-#        
-#        purchase_age = age - date.year - yearoccupied
-#        purchase_year = yearoccupied    
-#        purchase_value = value / np.prod(np.array([1 + economy.valuerate(i, basis='year') for i in range(purchase_year, year)]))            
-#        purchase_downpayment = banks['mortgage'].downpayment(purchase_value)
-#        purchase_cost = banks['mortgage'].cost(purchase_value - purchase_downpayment)
-#        purchase_cash = purchase_downpayment - purchase_cost    
-#        assert start_year <= purchase_year <= date.year and start_age <= purchase_age <= age
-#        
-#        targets = {purchase_age - start_age:purchase_cash}
-#        financials = cls(max(ages['death'] - start_age, 0), max(ages['retirement'] - start_age, 0), targets=targets, terminalwealth=0, discountrate=discountrate, risktolerance=risktolerance, 
-#                         income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, **economy.rates(date.year, basis='year'), basis='year')
-#        financials = financials.projection(max(purchase_age - start_age, 0), **economy.rates(date.year, basis='year'), basis='year')
-#        financials = financials.buy(purchase_value, bank=banks['mortgage'])
-#        financials = financials.projection(max(age - purchase_age, 0), **economy.rates(date.year, basis='year'), basis='year')    
-#        return financials    
+    purchase_age = age - date.year - yearoccupied
+    purchase_year = yearoccupied    
+    purchase_value = value / np.prod(np.array([1 + economy.valuerate(i, basis='year') for i in range(purchase_year,  date.year)]))            
+    purchase_downpayment = economy.banks['mortgage'].downpayment(purchase_value)
+    purchase_cost = economy.banks['mortgage'].cost(purchase_value - purchase_downpayment)
+    purchase_cash = purchase_downpayment - purchase_cost    
+    assert start_year <= purchase_year <= date.year and start_age <= purchase_age <= age
+    
+    targets = {purchase_age - start_age:purchase_cash}
+    horizon = max(economy.ages['death'] - start_age, 0)
+    incomehorizon = max(economy.ages['retirement'] - start_age, 0)
+    rates = {'{}rate'.format(key):rate(date.year, basis='month') for key, rate in economy.rates.items()}
+    financials = Financials(horizon, incomehorizon, targets=targets, terminalwealth=0, income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, **rates)
+    financials = financials.projection(max(purchase_age - start_age, 0), basis='month')
+    financials = financials.buy(purchase_value, bank=economy.banks['mortgage'])
+    financials = financials.projection(max(age - purchase_age, 0), basis='month')    
+    return financials    
     
 
 class InsufficientFundsError(Exception): pass
@@ -84,8 +82,8 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
         return hash((self.__class__.__name__, *horizons, *rates, *money, *loans,))    
 
     def __new__(cls, horizonduration, incomeduration, *args, targets={}, terminalwealth=0, basis='month', **kwargs):        
-        kwargs.update({'discountrate':_monthrate(kwargs['discountrate']), 'income':_monthflow(kwargs['income'])})
-        targets = {_monthduration[basis](duration):wealthtarget for duration, wealthtarget in targets.keys()}
+        kwargs.update({'discountrate':_convertrate(basis, 'month', kwargs['discountrate']), 'income':_convertflow(basis, 'month', kwargs['income'])})
+        targets = {_convertduration(basis, 'month', duration):wealthtarget for duration, wealthtarget in targets.keys()}
         horizon, incomehorizon, consumption = horizonduration, incomeduration, cls.__consumption(horizonduration, incomeduration, terminalwealth, *args, basis=basis, **kwargs)  
         instance = super().__new__(cls, horizon=horizon, incomehorizon=incomehorizon, consumption=consumption, **kwargs)   
         for targetduration in reversed(sorted(targets.keys())):            
@@ -96,8 +94,8 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
 
     @classmethod
     def __consumption(cls, horizonduration, incomeduration, terminalwealth, *args, discountrate, riskrate, income, wealth, value, basis='month', **kwargs):
-        horizonduration, incomeduration = [_monthduration[basis](kwargs[rate]) for rate in (horizonduration, incomeduration)]   
-        wealthrate, incomerate, valuerate = [_monthrate[basis](kwargs[rate]) for rate in ('wealthrate', 'incomerate', 'valuerate')]      
+        horizonduration, incomeduration = [_convertduration(basis, 'month', duration) for duration in (horizonduration, incomeduration)]   
+        wealthrate, incomerate, valuerate = [_convertrate(basis, 'month', rate) for rate in ('wealthrate', 'incomerate', 'valuerate')]      
         mortgage, studentloan, debt = [kwargs.get(loan, None) for loan in ('mortgage', 'studentloan', 'debt')]
         w = wealth_factor(wealthrate, horizonduration)
         a = value_factor(valuerate, horizonduration)
@@ -112,7 +110,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
      
     def wealth(self, duration, *args, basis='month', **kwargs):
         if duration > self.__horizonduration: raise ExceededHorizonError()
-        duration = _monthduration[basis](kwargs[duration])            
+        duration = _convertduration(basis, 'month', duration)        
         w = wealth_factor(self.wealthrate, duration)        
         i = income_factor(self.incomerate, self.wealthrate, self.incomeduration)
         c = consumption_factor(theta(self.riskrate, self.discountrate, self.wealthrate), self.wealthrate, duration)
@@ -123,7 +121,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
     
     def value(self, duration, *args, basis='month', **kwargs):
         if duration > self.__horizonduration: raise ExceededHorizonError()
-        duration = _monthduration[basis](kwargs[duration])   
+        duration = _convertduration(basis, 'month', duration) 
         a = value_factor(self.valuerate, duration)
         return a * self.value 
     
@@ -161,7 +159,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
     def projection(self, duration, *args, basis='month', **kwargs):  
         newwealth = self.wealth(duration, *args, basis=basis, **kwargs)
         newvalue = self.value(duration, *args, basis=basis, **kwargs)       
-        duration = _monthduration[basis](kwargs[duration])
+        duration = _convertduration(basis, 'month', duration)
         newincome = self.income * pow(1 + self.incomerate, duration)
         newmortgage = self.mortgage.projection(duration, *args, **kwargs) if self.mortgage is not None else None
         newstudentloan = self.studentloan.projection(duration, *args, **kwargs) if self.studentloan is not None else None

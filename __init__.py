@@ -16,9 +16,8 @@ from utilities.concepts import concept
 from utilities.stats import MonteCarlo
 from uscensus import process, renderer
 
-from realestate.feed import Feed
+from realestate.feed import Feed, Environment
 from realestate.economy import Bank, School, Broker, Economy
-from realestate.markets import PropertyMarket
 from realestate.households import createHousehold
 from realestate.housing import createHousing
 
@@ -33,14 +32,14 @@ AGE_CONSTANTS = {'adulthood':15, 'retirement':65, 'death':95}
 RATE_CONSTANTS = {'wealthrate':0.05, 'discountrate':0.03, 'riskrate':2}
 
 RATE_TABLES = {'incomerate':'Δ%avginc|geo', 'valuerate':'Δ%avgval|geo@owner', 'rentrate':'Δ%avgrent|geo@renter'}
-HOUSEHOLD_TABLES = {'household':'#hh|geo', 'income':'#hh|geo|~inc', 'equity':'#hh|geo|~equity', 'value':'#hh|geo|~val@owner', 'rent':'#hh|geo|~rent@renter', 'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
+HOUSEHOLD_TABLES = {'household':'#hh|geo', 'income':'#hh|geo|~inc', 'equity':'#hh|geo|equity', 'value':'#hh|geo|~val@owner', 'rent':'#hh|geo|~rent@renter', 'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
 STRUCTURE_TABLES = {'structure':'#st|geo', 'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'bedrooms':'#st|geo|~br', 'rooms':'#st|geo|~rm', 'sqft':'#st|geo|sqft', 'yearoccupied':'#st|geo|~yrocc'}
 POPULATION_TABLES = {'population':'#pop|geo', 'incomelevel':'#pop|geo|inclvl', 'race':'#pop|geo|race', 'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'english':'#pop|geo|eng', 'communte':'#pop|geo|~cmte'}
 
 calculations = process()
 feed = Feed(calculations, renderer, **HOUSEHOLD_TABLES, **STRUCTURE_TABLES, **POPULATION_TABLES, **RATE_TABLES)                        
 concepts = {
-    'count': concept('count', ['households', 'structures', 'population'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
+    'count': concept('count', ['household', 'structure', 'population'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
     'household': concept('household', ['age', 'education', 'income', 'equity', 'value', 'yearoccupied', 'race', 'language', 'children', 'size'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
     'housing': concept('housing', ['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
     'crime': concept('crime', ['incomelevel', 'race', 'education', 'unit'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)), 
@@ -65,37 +64,45 @@ banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':de
 
 
 def createHouseholds(environment, *inputArgs, date, **inputParms):
+    i = 1
     count = environment['count'](date=date)['household']
-    for geography in environment.iterate('geography'):
-        households = environment['households'](geography=geography, date=date)
+    for geography, in environment.iterate('geography'):
+        households = environment['household'](geography=geography, date=date)
         sampler = MonteCarlo(**households.todict())
         rates=dict(wealth=RATE_CONSTANTS['wealth'], discount=RATE_CONSTANTS['discount'], risk=RATE_CONSTANTS['risk'], 
                    income=environment['income'](geography=geography), value=environment['value'](geography=geography))
         economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
-        for index, values in sampler(count[geography]).iterrows(): 
-            yield createHousehold(geography, date, horizon=5, economy=economy, **values.to_dict())
+        yield i
+        i = i + 1
+
+#        for index, values in sampler(count[geography]).iterrows(): 
+#            yield createHousehold(geography, date, horizon=5, economy=economy, **values.to_dict())
 
 
 def createHousings(environment, *inputArgs, date, **inputParms):
+    i = 1
     count = environment['count'](date=date)['structure']
-    for geography in environment.iterate('geography'):
-        housings = environment['housings'](geography=geography, date=date)
+    for geography, in environment.iterate('geography'):
+        housings = environment['housing'](geography=geography, date=date)
         sampler = MonteCarlo(**housings.todict()) 
         rates = dict(value=environment['value'](geography=geography), rent=environment['rent'](geography=geography))
         content = dict(crime=environment['crime'](geography=geography, date=date), school=environment['school'](geography=geography, date=date), 
                        proximity=environment['proximity'](geography=geography, date=date), community=environment['community'](geography=geography, date=date))
         economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
-        for index, values in sampler(count[geography]).iterrows(): 
-            yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values.to_dict(), **content)
+        yield i
+        i = i + 1
+
+#        for index, values in sampler(count[geography]).iterrows(): 
+#            yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values.to_dict(), **content)
         
 
 def main(*inputArgs, **inputParms):
-    with feed(concepts, *inputArgs, **inputParms) as environment:
-        households = [household for household in createHouseholds(environment, *inputArgs, **inputParms)]
-        housings = [housing for housing in createHousings(environment, *inputArgs, **inputParms)]
+    environment = Environment(concepts, **feed(*inputArgs, **inputParms))
+    households = [household for household in createHouseholds(environment, *inputArgs, **inputParms)]
+    housings = [housing for housing in createHousings(environment, *inputArgs, **inputParms)]
     
-    for household in households: print(str(household))
-    for housing in housings: print(str(housing))
+#    for household in households: print(str(household))
+#    for housing in housings: print(str(housing))
 
 
 if __name__ == '__main__':  
@@ -104,14 +111,14 @@ if __name__ == '__main__':
     
     listparser, dictparser = ListParser(pattern=','), DictParser(pattern=',|')
     geography_parser = lambda item: Geography(dictparser(item))
-    history_parser = lambda items: [Date.fromstr(item) for item in listparser(items)]
-    date_parser = lambda item: Date.fromstr(item) if item else None
-    variable_parsers = {'geography':geography_parser, 'date':date_parser, 'history':history_parser}
+    dates_parser = lambda items: [Date.fromstr(item) for item in listparser(items)]
+    date_parser = lambda item: Date.fromstr(item)
+    variable_parsers = {'geography':geography_parser, 'dates':dates_parser, 'date':date_parser}
     inputparser = InputParser(assignproxy='=', spaceproxy='_', parsers=variable_parsers)    
     
     print(repr(inputparser))    
     sys.argv.extend(['geography=state|6,county|29,tract|*',
-                     'history=2018,2017,2016',
+                     'dates=2018,2017,2016,2015',
                      'date=2018'])
     inputparser(*sys.argv[1:])  
     main(*inputparser.inputArgs, **inputparser.inputParms)

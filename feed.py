@@ -43,9 +43,6 @@ class Feed(object):
         print(self.__renderer(self.__calculations[tableID]), '\n')
         return self.__calculations[tableID](*args, **kwargs)   
 
-    def __enter__(self, concepts, *args, **kwargs): return Environment(concepts, **self(*args, **kwargs))
-    def __exit__(self, *args): pass
-
 
 class Environment(object):
     @property
@@ -61,11 +58,12 @@ class Environment(object):
     def __getdimensions(self, **tables):
         axiskeys = set(_flatten([table.headerkeys for table in tables.values()]))
         axiskeys = [axiskey for axiskey in axiskeys if all([axiskey in table.headers for table in tables.values()])]
-        return [axiskey for axiskey in axiskeys if all([list(tables.values())[0].headers[axiskey] == table.headers[axiskey] for table in list(tables.value())[1:]])]
+        headers = list(tables.values())[0].headers
+        return [axiskey for axiskey in axiskeys if all([set(headers[axiskey]) == set(table.headers[axiskey]) for table in list(tables.values())[1:]])]
   
     def iterate(self, *axes):
         assert all([axis in self.dimensions for axis in axes])
-        for items in product(*[self.__tables.headers[axis] for axis in axes]): yield items
+        for items in product(*[list(self.__tables.values())[0].headers[axis] for axis in axes]): yield items
 
     def __getitem__(self, key):
         assert key in self.concepts.keys()
@@ -74,21 +72,17 @@ class Environment(object):
 
     def __call__(self, key, *args, **kwargs):
         assert key in self.concepts.keys()
-        return self.concepts[key](**self.__getTables(self.concepts[key].fields, *args, **kwargs))
+        tables = self.__getTables(self.concepts[key]._fields, *args, **kwargs)
+        return self.concepts[key](tables, *args, **kwargs)
 
-    def __getTable(self, field, *args, axes=[], axis=None, **kwargs):
-        axes = _filterempty(_aslist(axes) + _aslist(axis))
-        newscope = {field:kwargs.pop(key) for key in self.__tables[field].headerkeys if key not in _aslist(axes)}
+    def __getTable(self, field, *args, **kwargs):
+        newscope = {key:kwargs[key] for key in self.__tables[field].headerkeys if key in kwargs.keys()}
         table = self.__tables[field].sel(**newscope)
-        for scopekey in newscope.keys(): table.squeeze(scopekey)
+        for scopekey in newscope.keys(): table = table.squeeze(scopekey)
         return table    
 
     def __getTables(self, fields, *args, **kwargs):
         return {field:self.__getTable(field, *args, **kwargs) for field in _aslist(fields)}
-
-
-
-
 
 
 

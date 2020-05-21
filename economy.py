@@ -11,7 +11,7 @@ from scipy.interpolate import interp1d
 from numbers import Number
 from collections import namedtuple as ntuple
 
-from utilities.dispatchers import clskey_singledispatcher as keydispatcher
+from utilities.dispatchers import key_singledispatcher as keydispatcher
 from utilities.strings import uppercase
 
 __version__ = "1.0.0"
@@ -39,11 +39,11 @@ _financingcost = lambda x, r: x * (1 + r)
 
 
 @keydispatcher
-def curve(method, x, y, *args, **kwargs): raise KeyError(method)
-@curve.register('average')
-def average(x, y, *args, weights=None, **kwargs): return _curve(x, y, np.average(y, weights=_normalize(weights) if weights else None))
-@curve.register('last')
-def last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
+def createcurve(method, x, y, *args, **kwargs): raise KeyError(method)
+@createcurve.register('average')
+def createcurve_average(x, y, *args, weights=None, **kwargs): return _curve(x, y, np.average(y, weights=_normalize(weights) if weights else None))
+@createcurve.register('last')
+def createcurve_last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
 
 
 class Economy(ntuple('Economy', 'geography date rates schools banks broker')):
@@ -63,11 +63,15 @@ class Rate(object):
         return pow((1 + rate), factor) - 1
     
     @classmethod
-    def fromvalues(cls, x, y, *args, method='average', **kwargs): return curve(method, x, y, *args, **kwargs)
+    def fromcurve(cls, curve, *args, **kwargs): return cls(curve, *args, **kwargs)     
     @classmethod
-    def frompoint(cls, x, y, *args, **kwargs): return curve('last', [x, x], [y, y], *args, **kwargs)
+    def fromvalues(cls, x, y, *args, method='average', **kwargs): 
+        curve = createcurve(method, x, y, *args, **kwargs)
+        return cls(curve, *args, **kwargs)
     @classmethod
-    def fromcurve(cls, curve, *args, **kwargs): return cls(curve, *args, **kwargs)    
+    def frompoint(cls, x, y, *args, **kwargs): 
+        curve = createcurve('last', [x, x], [y, y], *args, **kwargs)
+        return cls(curve, *args, **kwargs)
             
     
 class Loan(ntuple('Loan', 'type balance rate duration')):

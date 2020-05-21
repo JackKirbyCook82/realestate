@@ -33,19 +33,19 @@ RATE_CONSTANTS = {'wealthrate':0.05, 'discountrate':0.03, 'riskrate':2}
 
 RATE_TABLES = {'incomerate':'Δ%avginc|geo', 'valuerate':'Δ%avgval|geo@owner', 'rentrate':'Δ%avgrent|geo@renter'}
 HOUSEHOLD_TABLES = {'household':'#hh|geo', 'income':'#hh|geo|~inc', 'equity':'#hh|geo|equity', 'value':'#hh|geo|~val@owner', 'rent':'#hh|geo|~rent@renter', 'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
-STRUCTURE_TABLES = {'structure':'#st|geo', 'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'bedrooms':'#st|geo|~br', 'rooms':'#st|geo|~rm', 'sqft':'#st|geo|sqft', 'yearoccupied':'#st|geo|~yrocc'}
-POPULATION_TABLES = {'population':'#pop|geo', 'incomelevel':'#pop|geo|inclvl', 'race':'#pop|geo|race', 'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'english':'#pop|geo|eng', 'communte':'#pop|geo|~cmte'}
+STRUCTURE_TABLES = {'structure':'#st|geo', 'unit':'#st|geo|unit', 'yearbuilt':'#st|geo|~yrblt', 'bedrooms':'#st|geo|~br', 'rooms':'#st|geo|~rm', 'sqft':'#st|geo|~sqft', 'yearoccupied':'#st|geo|~yrocc'}
+POPULATION_TABLES = {'population':'#pop|geo', 'incomelevel':'#pop|geo|inclvl', 'race':'#pop|geo|race', 'education':'#pop|geo|edu', 'language':'#pop|geo|lang', 'english':'#pop|geo|eng', 'commute':'#pop|geo|~cmte'}
 
 calculations = process()
 feed = Feed(calculations, renderer, **HOUSEHOLD_TABLES, **STRUCTURE_TABLES, **POPULATION_TABLES, **RATE_TABLES)                        
 concepts = {
-    'count': concept('count', ['household', 'structure', 'population'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
-    'household': concept('household', ['age', 'education', 'income', 'equity', 'value', 'yearoccupied', 'race', 'language', 'children', 'size'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
-    'housing': concept('housing', ['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
-    'crime': concept('crime', ['incomelevel', 'race', 'education', 'unit'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)), 
-    'school': concept('school', ['language', 'education', 'race', 'english', 'income', 'value'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
-    'proximity': concept('proximity', ['commute'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
-    'community': concept('community',['race', 'language', 'children', 'age', 'education'], function=lambda x, *args, **kwargs: x.tohistogram(*args, **kwargs)),
+    'count': concept('count', ['household', 'structure', 'population'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
+    'household': concept('household', ['age', 'education', 'income', 'equity', 'value', 'yearoccupied', 'race', 'language', 'children', 'size'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
+    'housing': concept('housing', ['unit', 'bedrooms', 'rooms', 'sqft', 'yearbuilt'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
+    'crime': concept('crime', ['incomelevel', 'race', 'education', 'unit'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)), 
+    'school': concept('school', ['language', 'education', 'race', 'english', 'income', 'value'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
+    'proximity': concept('proximity', ['commute'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
+    'community': concept('community',['race', 'language', 'children', 'age', 'education'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
     'rate': concept('rate', ['incomerate', 'valuerate', 'rentrate'], function=lambda x, *args, **kwargs: x.tocurve(*args, **kwargs))}
 
 mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
@@ -64,45 +64,38 @@ banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':de
 
 
 def createHouseholds(environment, *inputArgs, date, **inputParms):
-    i = 1
     count = environment['count'](date=date)['household']
     for geography, in environment.iterate('geography'):
         households = environment['household'](geography=geography, date=date)
         sampler = MonteCarlo(**households.todict())
-        rates=dict(wealth=RATE_CONSTANTS['wealth'], discount=RATE_CONSTANTS['discount'], risk=RATE_CONSTANTS['risk'], 
-                   income=environment['income'](geography=geography), value=environment['value'](geography=geography))
+        rates=dict(wealth=RATE_CONSTANTS['wealthrate'], discount=RATE_CONSTANTS['discountrate'], risk=RATE_CONSTANTS['riskrate'], 
+                   income=environment['rate'](geography=geography)['incomerate'], value=environment['rate'](geography=geography)['valuerate'])
         economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
-        yield i
-        i = i + 1
-
-#        for index, values in sampler(count[geography]).iterrows(): 
+        for index, values in sampler(count[geography]).iterrows(): 
 #            yield createHousehold(geography, date, horizon=5, economy=economy, **values.to_dict())
-
+            yield values
 
 def createHousings(environment, *inputArgs, date, **inputParms):
-    i = 1
     count = environment['count'](date=date)['structure']
     for geography, in environment.iterate('geography'):
         housings = environment['housing'](geography=geography, date=date)
         sampler = MonteCarlo(**housings.todict()) 
-        rates = dict(value=environment['value'](geography=geography), rent=environment['rent'](geography=geography))
+        rates = dict(value=environment['rate'](geography=geography)['valuerate'], rent=environment['rate'](geography=geography)['rentrate'])
         content = dict(crime=environment['crime'](geography=geography, date=date), school=environment['school'](geography=geography, date=date), 
                        proximity=environment['proximity'](geography=geography, date=date), community=environment['community'](geography=geography, date=date))
         economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
-        yield i
-        i = i + 1
-
-#        for index, values in sampler(count[geography]).iterrows(): 
+        for index, values in sampler(count[geography]).iterrows(): 
 #            yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values.to_dict(), **content)
-        
+            yield values
+            
 
 def main(*inputArgs, **inputParms):
     environment = Environment(concepts, **feed(*inputArgs, **inputParms))
     households = [household for household in createHouseholds(environment, *inputArgs, **inputParms)]
     housings = [housing for housing in createHousings(environment, *inputArgs, **inputParms)]
     
-#    for household in households: print(str(household))
-#    for housing in housings: print(str(housing))
+    for household in households: print(str(household))
+    for housing in housings: print(str(housing))
 
 
 if __name__ == '__main__':  

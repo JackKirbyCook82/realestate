@@ -32,7 +32,18 @@ consumption_factor = lambda tr, wr, n: pow(1 + tr, n) / (tr - wr)
 loan_factor = lambda lr, wr, n: (lr / wr) * (pow(1 + lr, n) / (1 - pow(1 + lr, n)))
   
 
-def createFinancials(geography, date, *args, horizon, age, education, income, value, yearoccupied, economy, **kwargs): 
+def createFinancials(geography, date, *args, horizon, age, education, income, value, yearoccupied, economy, variables, **kwargs): 
+    
+    print(repr(geography))
+    print(repr(date))
+    print(horizon)
+    print(age)
+    print(education)
+    print(income)
+    print(value)
+    print(yearoccupied)
+    print(repr(economy))
+    
     start_school = economy.schools[education]
     start_age = economy.ages['adulthood'] + start_school.duration     
     start_year = date.year - age - start_school.duration    
@@ -52,12 +63,15 @@ def createFinancials(geography, date, *args, horizon, age, education, income, va
     horizon = max(economy.ages['death'] - start_age, 0)
     incomehorizon = max(economy.ages['retirement'] - start_age, 0)
     rates = {'{}rate'.format(key):rate(date.year, basis='month') for key, rate in economy.rates.items()}
-    financials = Financials(horizon, incomehorizon, targets=targets, terminalwealth=0, income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, **rates)
+    financials = Financials(horizon, incomehorizon, targets=targets, terminalwealth=0, income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, variables=variables, **rates)
     financials = financials.projection(max(purchase_age - start_age, 0), basis='month')
     financials = financials.buy(purchase_value, bank=economy.banks['mortgage'])
     financials = financials.projection(max(age - purchase_age, 0), basis='month')    
     return financials    
-    
+ 
+def createFinancialsKey(*args, horizon, incomehorizon, income, consumption, rates, loans, assets, **kwargs):
+    return ('Financials', horizon, incomehorizon, *rates, income, consumption, *assets, *loans,) 
+
 
 class InsufficientFundsError(Exception): pass
 class InsufficientCoverageError(Exception): pass
@@ -68,18 +82,12 @@ class ExceededHorizonError(Exception): pass
 class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskrate incomerate valuerate wealthrate income wealth value consumption mortgage studentloan debt')):
     stringformat = 'Financials|Assets=${assets:.0f}, Debt=${debt:.0f}, Income=${income:.0f}/MO, Consumption=${consumption:.0f}/MO'
     def __str__(self): return self.stringformat(assets=self.wealth + self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance, consumption=self.consumption)     
-
+    def __hash__(self): return hash(createFinancialsKey(horizons=self.horizon, incomehorizon=self.incomehorizon, income=self.income, consumption=self.consumption, rates=self.rates, loans=self.loans, assets=self.assets))
+    
     def __repr__(self): 
         content = {'mortgage':repr(self.mortgage), 'studentloan':repr(self.studentloan), 'debt':repr(self.debt)}
         content.update({field:getattr(self, field) for field in self._fields if field not in content.keys()})
-        return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
-
-    def __hash__(self): 
-        horizons = (self.horizon, self.incomehorizon,)
-        rates = (self.discountrate, self.riskrate, self.incomerate, self.valuerate, self.wealthrate,)
-        money = (self.income, self.wealth, self.value, self.consumption,)
-        loans = (hash(self.mortgage), hash(self.studentloan), hash(self.debt),)
-        return hash((self.__class__.__name__, *horizons, *rates, *money, *loans,))    
+        return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()])) 
 
     def __new__(cls, horizonduration, incomeduration, *args, targets={}, terminalwealth=0, basis='month', **kwargs):        
         kwargs.update({'discountrate':_convertrate(basis, 'month', kwargs['discountrate']), 'income':_convertflow(basis, 'month', kwargs['income'])})
@@ -91,6 +99,12 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
                 horizon, consumption = targetduration, cls.__consumption(targetduration, incomeduration, targets[targetduration], *args, basis=basis, **kwargs)  
                 instance = super().__new__(cls, horizon=horizon, consumption=consumption, **kwargs) 
         return instance  
+
+    def todict(self): return self._asdict()
+    def __getitem__(self, field): return self.todict()[field]
+    def __getattr__(self, field): return getattr(self, field)
+    def __init__(self, *args, variables, **kwargs):
+        self.__variables = variables
 
     @classmethod
     def __consumption(cls, horizonduration, incomeduration, terminalwealth, *args, discountrate, riskrate, income, wealth, value, basis='month', **kwargs):
@@ -141,7 +155,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
         proceeds = self.value - broker.cost(self.value) - self.mortgage.balance 
         loans = dict(mortgage=self.mortgage.payoff() if self.mortgage is not None else None, studentloan=self.studentloan, debt=self.debt)
         assets = dict(income=self.income, wealth=self.wealth + proceeds, value=0)
-        newfinancials = self.__class__(**assets, **self.rates, **loans)  
+        newfinancials = self.__class__(**assets, **self.rates, **loans, variables=self.__variables)  
         return newfinancials
     
     def buy(self, value, *args, bank, **kwargs): 
@@ -151,7 +165,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
         mortgage = bank.loan(value - downpayment)
         loans = dict(mortgage=mortgage, studentloan=self.studentloan, debt=self.debt)
         assets = dict(income=self.income, wealth=self.wealth - downpayment - closingcost, value=value)
-        newfinancials = self.__class__(**assets, **self.rates, **loans) 
+        newfinancials = self.__class__(**assets, **self.rates, **loans, variables=self.__variables) 
         if newfinancials.wealth < 0: raise InsufficientFundsError()  
         if not bank.qualify(newfinancials.coverage): raise InsufficientCoverageError()
         return newfinancials
@@ -166,7 +180,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
         newdebt = self.debt.projection(duration, *args, **kwargs) if self.debt is not None else None
         loans = dict(mortgage=newmortgage, studentloan=newstudentloan, debt=newdebt)
         assets = dict(income=newincome, wealth=newwealth, value=newvalue)
-        newfinancials = self.__class__(**assets, **self.rates, **loans)  
+        newfinancials = self.__class__(**assets, **self.rates, **loans, variables=self.__variables)  
         return newfinancials
 
 

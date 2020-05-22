@@ -12,7 +12,7 @@ from numbers import Number
 from collections import namedtuple as ntuple
 
 from utilities.dispatchers import key_singledispatcher as keydispatcher
-from utilities.strings import uppercase
+from utilities.strings import uppercase, dictstring
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -53,6 +53,7 @@ class Economy(ntuple('Economy', 'geography date rates schools banks broker')):
 
 
 class Rate(object): 
+    def __repr__(self): return '{}(curve={}, basis={})'.format(self.__class__.__name__, repr(self.__curve), self.__basis)
     def __init__(self, curve, *args, basis='year', **kwargs): 
         self.__curve = curve
         self.__basis = basis
@@ -75,9 +76,9 @@ class Rate(object):
             
     
 class Loan(ntuple('Loan', 'type balance rate duration')):
-    stringformat = 'Loan|{type} ${balance} for {duration}MO @{rate}%/MO' 
+    stringformat = 'Loan|{type} ${balance:.0f} for {duration:.0f}MO @{rate:.2f}%/MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
-    def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, repr(value)]) for key, value in self._asdict().items()])) 
+    def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
     def __hash__(self): return hash((self.__class__.__name__, self.type, self.balance, self.rate, self.duration,))       
     
     def __new__(cls, *args, rate, duration, basis='month', **kwargs): 
@@ -95,25 +96,25 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     
     
 class Broker(ntuple('Broker', 'commisions')): 
-    stringformat = 'Broker|{commisions}%' 
+    stringformat = 'Broker|{commisions:.2f}%' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
-    def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, repr(value)]) for key, value in self._asdict().items()]))         
+    def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
     def cost(self, amount): return amount * (1 + self.commisions)    
  
     
 class School(ntuple('Education', 'type cost duration')):
-    stringformat = 'School|{type} costing ${cost} over {duration}MO' 
+    stringformat = 'School|{type} costing ${cost:.0f} over {duration:.0f} MOS' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
-    def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, repr(value)]) for key, value in self._asdict().items()])) 
+    def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
     
     def __new__(cls, *args, duration, basis='year', **kwargs): 
         return super().__new__(cls, *args, duration=_convertduration(basis, 'month', duration), **kwargs) 
 
     
 class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
-    stringformat = 'Bank|{type} providing {rate}%/MO for {duration}MO' 
+    stringformat = 'Bank|{type} providing {rate:.2f}%/MO loans for {duration:.0f} MOS' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
-    def __repr__(self): return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, repr(value)]) for key, value in self._asdict().items()])) 
+    def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
     
     def __new__(cls, *args, rate, duration, financing=0, coverage=0, loantovalue=1, basis='year', **kwargs): 
         rate, duration = _convertrate(basis, 'month', rate), _convertduration(basis, 'month', duration)

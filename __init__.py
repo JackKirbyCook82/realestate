@@ -46,7 +46,7 @@ concepts = {
     'school': concept('school', ['language', 'education', 'race', 'english', 'income', 'value'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
     'proximity': concept('proximity', ['commute'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
     'community': concept('community',['race', 'language', 'children', 'age', 'education'], function=lambda x, *args, **kwargs: x.tohistogram(*args, how='average', **kwargs)),
-    'rate': concept('rate', ['incomerate', 'valuerate', 'rentrate'], function=lambda x, *args, **kwargs: x.tocurve(*args, **kwargs))}
+    'rate': concept('rate', ['incomerate', 'valuerate', 'rentrate'], function=lambda x, *args, **kwargs: x.tocurve(*args, how='average', **kwargs))}
 
 mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
 studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
@@ -73,13 +73,9 @@ def createHouseholds(environment, *inputArgs, date, **inputParms):
             rates=dict(wealth=RATE_CONSTANTS['wealthrate'], discount=RATE_CONSTANTS['discountrate'], risk=RATE_CONSTANTS['riskrate'], 
                        income=environment['rate'](geography=geography)['incomerate'], value=environment['rate'](geography=geography)['valuerate'])
             economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
-            for index, values in sampler(count[geography]).iterrows(): 
-                for k, v in rates.items(): print(k, v)
-                for k, v in values.to_dict().items(): print(k, v)
-                print(economy)
-                raise Exception()
-                yield createHousehold(geography, date, horizon=5, economy=economy, **values.to_dict())
-
+            for index, values, variables in sampler(count[geography]): 
+                yield createHousehold(geography, date, horizon=5, economy=economy, **values.to_dict(), variables=variables)
+                
 
 def createHousings(environment, *inputArgs, date, **inputParms):
     count = environment['count'](date=date)['structure']
@@ -92,22 +88,21 @@ def createHousings(environment, *inputArgs, date, **inputParms):
             content = dict(crime=environment['crime'](geography=geography, date=date), school=environment['school'](geography=geography, date=date), 
                            proximity=environment['proximity'](geography=geography, date=date), community=environment['community'](geography=geography, date=date))
             economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
-            for index, values in sampler(count[geography]).iterrows(): 
-                for k, v in rates.items(): print(k, v)
-                for k, v in content.items(): print(k, v)
-                for k, v in values.to_dict().items(): print(k, v)
-                print(economy)
-                raise Exception()                
-                yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values.to_dict(), **content)             
+            for index, values, variables in sampler(count[geography]):               
+                yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values.to_dict(), **content, variables=variables)             
                 
+
+def display(items, maxcount=10):
+    for count, item in enumerate(items):
+        print('/n'.join([str(item), repr(item), '\n']))
+        if count >= maxcount: break
+
 
 def main(*inputArgs, **inputParms):
     environment = Environment(concepts, **feed(*inputArgs, **inputParms))
-    try: households = [household for household in createHouseholds(environment, *inputArgs, **inputParms)]
-    except: pass
-    try: housings = [housing for housing in createHousings(environment, *inputArgs, **inputParms)]
-    except: pass
-
+    display([housing for housing in createHousings(environment, *inputArgs, **inputParms)])
+    display([household for household in createHouseholds(environment, *inputArgs, **inputParms)])
+    
 
 if __name__ == '__main__':  
     tbls.set_options(linewidth=100, maxrows=40, maxcolumns=10, threshold=100, precision=2, fixednotation=True, framechar='=')

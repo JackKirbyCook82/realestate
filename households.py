@@ -35,11 +35,12 @@ class DeceasedHouseholderError(Exception): pass
 
 
 class Household(ntuple('Household', 'date geography age race language education children size')):
-    ages = {'adulthood':15, 'retirement':65, 'dealth':95} 
+    __instances = {}     
+    __ages = {'adulthood':15, 'retirement':65, 'dealth':95} 
 
-    stringformat = 'Household|{age}YRS {education} {race} w/{size}PPL speaking {lanuguage} {children}'      
+    stringformat = 'Household|{age} {education} {race} w/{size} speaking {lanuguage} {children}, [{count}]'      
     def __str__(self): 
-        householdstring = self.stringformat.format(age=self.age, race=self.race, language=self.language, education=self.education, children=self.children, size=self.size)
+        householdstring = self.stringformat.format(count=self.count, age=self.age, race=self.race, language=self.language, education=self.education, children=self.children, size=self.size)
         financialstring = str(self.__financials)
         return '\n'.join([householdstring, financialstring])        
     
@@ -49,31 +50,25 @@ class Household(ntuple('Household', 'date geography age race language education 
         content.update({field:str(getattr(self, field)) for field in self._fields if field not in content.keys()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
-    __instances = {} 
-    __count = 0
     @property
-    def count(self): return self.__count 
-    
-    @classmethod
-    def getcount(cls): return cls.__count
-    @classmethod
-    def addcount(cls): cls.__count += 1
+    def count(self): return self.__count
+    def addcount(self): self.__count += 1
     
     def __new__(cls, *args, age, **kwargs):
-        if age < cls.ages['adulthood']: raise PrematureHouseholderError()
-        if age > cls.ages['death']: raise DeceasedHouseholderError()              
+        if age < cls.__ages['adulthood']: raise PrematureHouseholderError()
+        if age > cls.__ages['death']: raise DeceasedHouseholderError()              
         key = createHouseholdKey(*args, **kwargs)
         if hash(key) in cls.__instances: 
             cls.__instances[key].addcount()
             return cls.__instances[key]
         else:
-            cls.__instances[key] = super().__new__(cls, age=age, **{field:kwargs[field] for field in cls._fields})
-            cls.__instances[key].addcount()
-            return cls.__instances[key]
+            newinstance = super().__new__(cls, age=age, **{field:kwargs[field] for field in cls._fields})
+            cls.__instances[key] = newinstance
+            return newinstance
     
-    def __init__(self, *args, financials, utility, variables, **kwargs): 
-        self.__utility, self.__financials = utility, financials              
-        self.__variables = variables    
+    def __init__(self, *args, financials, utility, **kwargs): 
+        self.__utility, self.__financials = utility, financials                 
+        self.__count = 1
     
     def todict(self): return self._asdict()
     def __getitem__(self, item): 

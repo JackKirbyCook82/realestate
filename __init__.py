@@ -28,7 +28,6 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-AGE_CONSTANTS = {'adulthood':15, 'retirement':65, 'death':95}
 RATE_CONSTANTS = {'wealthrate':0.05, 'discountrate':0.03, 'riskrate':2}
 
 RATE_TABLES = {'incomerate':'Δ%avginc|geo', 'valuerate':'Δ%avgval|geo@owner', 'rentrate':'Δ%avgrent|geo@renter'}
@@ -63,33 +62,33 @@ schools = {'uneducated':basic_school, 'gradeschool':grade_school, 'associates':a
 banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
 
 
-def createHouseholds(environment, *inputArgs, date, **inputParms):
-    count = environment['count'](date=date)['household']
-    for geography, in environment.iterate('geography'):
-        if count[geography] <= 0: print('Empty Geography: {}, #Households={}'.format(str(geography), count[geography]))
-        else: 
-            households = environment['household'](geography=geography, date=date)
-            sampler = MonteCarlo(**households.todict())
-            rates=dict(wealth=RATE_CONSTANTS['wealthrate'], discount=RATE_CONSTANTS['discountrate'], risk=RATE_CONSTANTS['riskrate'], 
-                       income=environment['rate'](geography=geography)['incomerate'], value=environment['rate'](geography=geography)['valuerate'])
-            economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
-            for index, values, variables in sampler(count[geography]): 
-                yield createHousehold(geography, date, horizon=5, economy=economy, **values.to_dict(), variables=variables)
-                
-
 def createHousings(environment, *inputArgs, date, **inputParms):
     count = environment['count'](date=date)['structure']
     for geography, in environment.iterate('geography'):
-        if count[geography] <= 0: print('Empty Geography: {}, #Structures={}'.format(str(geography), count[geography]))
+        if count[geography] <= 0: print('Empty Geography: {}\n, {} Structures'.format(str(geography), count[geography]))
         else: 
             housings = environment['housing'](geography=geography, date=date)
             sampler = MonteCarlo(**housings.todict()) 
             rates = dict(value=environment['rate'](geography=geography)['valuerate'], rent=environment['rate'](geography=geography)['rentrate'])
             content = dict(crime=environment['crime'](geography=geography, date=date), school=environment['school'](geography=geography, date=date), 
                            proximity=environment['proximity'](geography=geography, date=date), community=environment['community'](geography=geography, date=date))
-            economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, ages=AGE_CONSTANTS, method='average', basis='year')
-            for index, values, variables in sampler(count[geography]):               
-                yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values.to_dict(), **content, variables=variables)             
+            economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, method='average', basis='year')
+            for index, values in sampler(count[geography]):               
+                yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values, **content)             
+             
+
+def createHouseholds(environment, *inputArgs, date, **inputParms):
+    count = environment['count'](date=date)['household']
+    for geography, in environment.iterate('geography'):
+        if count[geography] <= 0: print('Empty Geography: {}\n, {} Households'.format(str(geography), count[geography]))
+        else: 
+            households = environment['household'](geography=geography, date=date)
+            sampler = MonteCarlo(**households.todict())
+            rates=dict(wealth=RATE_CONSTANTS['wealthrate'], discount=RATE_CONSTANTS['discountrate'], risk=RATE_CONSTANTS['riskrate'], 
+                       income=environment['rate'](geography=geography)['incomerate'], value=environment['rate'](geography=geography)['valuerate'])
+            economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, method='average', basis='year')
+            for index, values in sampler(count[geography]): 
+                yield createHousehold(geography, date, horizon=5, economy=economy, **values)
                 
 
 def display(items, maxcount=10):

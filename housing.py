@@ -17,12 +17,12 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, economy, variables, **kwargs):    
+def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, economy, **kwargs):    
     space = Space(dict(unit=unit, bedrooms=bedrooms, rooms=rooms, sqft=sqft))
     quality = Quality(dict(yearbuilt=yearbuilt))
     rentrate = economy.rates['rent'](date.year) 
     valuerate = economy.rates['value'](date.year)
-    return Housing(*args, date=date, geography=geography, space=space, quality=quality, rentrate=rentrate, valuerate=valuerate, variables=variables, **kwargs)
+    return Housing(*args, date=date, geography=geography, space=space, quality=quality, rentrate=rentrate, valuerate=valuerate, **kwargs)
 
 def createHousingKey(*args, date, geography, crime, school, space, community, proximity, quality, rentrate, valuerate, **kwargs):
     basis = (hash(date), hash(geography),)
@@ -30,13 +30,15 @@ def createHousingKey(*args, date, geography, crime, school, space, community, pr
     rates = (rentrate, valuerate,)
     return ('Housing', *basis, *concepts, *rates,) 
 
-Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'], function=int)
-Quality = concept('quality', ['yearbuilt'], function=int)
+Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'])
+Quality = concept('quality', ['yearbuilt'])
 
 
-class Housing(ntuple('Housing', 'date geography sqftcost rentrate valuerate crime school space community proximity quality')):
-    stringformat = 'Housing|{unit} with {sqft}SQFT in {geography} builtin {year}|${rent:.0f}/MO Rent|${price:.0f} Purchase|${cost:.0f}/MO Cost'       
-    def __str__(self): return self.stringformat.format(unit=self.unit, sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price, cost=self.ownercost)  
+class Housing(ntuple('Housing', 'date geography rentrate valuerate crime school space community proximity quality')):
+    __instances = {}     
+    
+    stringformat = 'Housing|{unit} with {sqft} in {geography} builtin {year}, ${rent:.0f}/MO Rent, ${price:.0f} Purchase, ${cost:.0f}/MO Cost, [{count}]'       
+    def __str__(self): return self.stringformat.format(count=self.count, unit=self.unit, sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price, cost=self.ownercost)  
     def __hash__(self): return hash(createHousingKey(**self.todict()))
     
     def __repr__(self): 
@@ -46,15 +48,9 @@ class Housing(ntuple('Housing', 'date geography sqftcost rentrate valuerate crim
         content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice)})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
-    __instances = {} 
-    __count = 0
     @property
-    def count(self): return self.__count  
-    
-    @classmethod
-    def getcount(cls): return cls.__count
-    @classmethod
-    def addcount(cls): cls.__count += 1
+    def count(self): return self.__count
+    def addcount(self): self.__count += 1
     
     def __new__(cls, *args, **kwargs):   
         key = createHousingKey(*args, **kwargs)
@@ -62,13 +58,13 @@ class Housing(ntuple('Housing', 'date geography sqftcost rentrate valuerate crim
             cls.__instances[key].addcount()
             return cls.__instances[key]
         else:
-            cls.__instances[key] = super().__new__(cls, **{field:kwargs[field] for field in cls._fields})
-            cls.__instances[key].addcount()
-            return cls.__instances[key]
+            newinstance = super().__new__(cls, **{field:kwargs[field] for field in cls._fields})
+            cls.__instances[key] = newinstance
+            return newinstance
 
-    def __init__(self, *args, sqftprice, sqftrent, variables, **kwargs): 
-        self.__sqftrent, self.__sqftprice = sqftrent, sqftprice     
-        self.__variables = variables
+    def __init__(self, *args, sqftprice, sqftrent, sqftcost, **kwargs): 
+        self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost     
+        self.__count = 1
 
     def todict(self): return self._asdict()
     def __getitem__(self, item): 
@@ -84,11 +80,11 @@ class Housing(ntuple('Housing', 'date geography sqftcost rentrate valuerate crim
     def unit(self): return self.space.unit
     
     @property
-    def price(self): return self.__sqftprice * self.sqft      
+    def price(self): return self.__sqftprice * self.sqft.value      
     @property
-    def ownercost(self): return self.sqftcost * self.sqft    
+    def ownercost(self): return self.__sqftcost * self.sqft.value    
     @property
-    def rentercost(self): return self.__sqftrent * self.sqft    
+    def rentercost(self): return self.__sqftrent * self.sqft.value    
         
     
 

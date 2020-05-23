@@ -32,17 +32,17 @@ consumption_factor = lambda tr, wr, n: pow(1 + tr, n) / (tr - wr)
 loan_factor = lambda lr, wr, n: (lr / wr) * (pow(1 + lr, n) / (1 - pow(1 + lr, n)))
   
 
-def createFinancials(geography, date, *args, horizon, age, education, income, value, yearoccupied, economy, variables, **kwargs): 
+def createFinancials(geography, date, *args, horizon, age, education, income, value, yearoccupied, economy, **kwargs): 
     
-    print(repr(geography))
-    print(repr(date))
+    print(geography)
+    print(date)
     print(horizon)
     print(age)
     print(education)
     print(income)
     print(value)
     print(yearoccupied)
-    print(repr(economy))
+    raise Exception()
     
     start_school = economy.schools[education]
     start_age = economy.ages['adulthood'] + start_school.duration     
@@ -63,7 +63,7 @@ def createFinancials(geography, date, *args, horizon, age, education, income, va
     horizon = max(economy.ages['death'] - start_age, 0)
     incomehorizon = max(economy.ages['retirement'] - start_age, 0)
     rates = {'{}rate'.format(key):rate(date.year, basis='month') for key, rate in economy.rates.items()}
-    financials = Financials(horizon, incomehorizon, targets=targets, terminalwealth=0, income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, variables=variables, **rates)
+    financials = Financials(horizon, incomehorizon, targets=targets, terminalwealth=0, income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, **rates)
     financials = financials.projection(max(purchase_age - start_age, 0), basis='month')
     financials = financials.buy(purchase_value, bank=economy.banks['mortgage'])
     financials = financials.projection(max(age - purchase_age, 0), basis='month')    
@@ -99,9 +99,6 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
                 horizon, consumption = targetduration, cls.__consumption(targetduration, incomeduration, targets[targetduration], *args, basis=basis, **kwargs)  
                 instance = super().__new__(cls, horizon=horizon, consumption=consumption, **kwargs) 
         return instance  
-
-    def __init__(self, *args, variables, **kwargs):
-        self.__variables = variables
 
     def todict(self): return self._asdict()
     def __getitem__(self, item): 

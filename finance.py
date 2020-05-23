@@ -86,7 +86,7 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
     
     def __repr__(self): 
         content = {'mortgage':repr(self.mortgage), 'studentloan':repr(self.studentloan), 'debt':repr(self.debt)}
-        content.update({field:getattr(self, field) for field in self._fields if field not in content.keys()})
+        content.update({field:str(getattr(self, field)) for field in self._fields if field not in content.keys()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()])) 
 
     def __new__(cls, horizonduration, incomeduration, *args, targets={}, terminalwealth=0, basis='month', **kwargs):        
@@ -100,11 +100,14 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
                 instance = super().__new__(cls, horizon=horizon, consumption=consumption, **kwargs) 
         return instance  
 
-    def todict(self): return self._asdict()
-    def __getitem__(self, field): return self.todict()[field]
-    def __getattr__(self, field): return getattr(self, field)
     def __init__(self, *args, variables, **kwargs):
         self.__variables = variables
+
+    def todict(self): return self._asdict()
+    def __getitem__(self, item): 
+        if isinstance(item, (int, slice)): return super().__getitem__(item)
+        elif isinstance(item, str): return getattr(self, item)
+        else: raise TypeError(type(item))
 
     @classmethod
     def __consumption(cls, horizonduration, incomeduration, terminalwealth, *args, discountrate, riskrate, income, wealth, value, basis='month', **kwargs):

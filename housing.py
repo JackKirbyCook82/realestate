@@ -42,8 +42,8 @@ class Housing(ntuple('Housing', 'date geography sqftcost rentrate valuerate crim
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography)} 
         content.update({'crime':repr(self.crime), 'school':repr(self.school), 'space':repr(self.space), 'community':repr(self.community), 'proximity':repr(self.proximity), 'quality':repr(self.quality)})
-        content.update({field:getattr(self, field) for field in self._fields if field not in content.keys()})
-        content.update({'sqftrent':self.__sqftrent, 'sqftprice':self.__sqftprice})
+        content.update({field:str(getattr(self, field)) for field in self._fields if field not in content.keys()})
+        content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice)})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
     __instances = {} 
@@ -66,12 +66,15 @@ class Housing(ntuple('Housing', 'date geography sqftcost rentrate valuerate crim
             cls.__instances[key].addcount()
             return cls.__instances[key]
 
-    def todict(self): return self._asdict()
-    def __getitem__(self, field): return self.todict()[field]
-    def __getattr__(self, field): return getattr(self, field)
     def __init__(self, *args, sqftprice, sqftrent, variables, **kwargs): 
         self.__sqftrent, self.__sqftprice = sqftrent, sqftprice     
         self.__variables = variables
+
+    def todict(self): return self._asdict()
+    def __getitem__(self, item): 
+        if isinstance(item, (int, slice)): return super().__getitem__(item)
+        elif isinstance(item, str): return getattr(self, item)
+        else: raise TypeError(type(item))
     
     @property
     def year(self): return self.quality.yearbuilt
@@ -83,7 +86,7 @@ class Housing(ntuple('Housing', 'date geography sqftcost rentrate valuerate crim
     @property
     def price(self): return self.__sqftprice * self.sqft      
     @property
-    def ownercost(self): return self.__sqftcost * self.sqft    
+    def ownercost(self): return self.sqftcost * self.sqft    
     @property
     def rentercost(self): return self.__sqftrent * self.sqft    
         

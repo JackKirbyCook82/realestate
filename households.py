@@ -46,7 +46,7 @@ class Household(ntuple('Household', 'date geography age race language education 
     def __hash__(self): return hash(createHouseholdKey(**self.todict()))    
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography), 'utility':repr(self.__utility), 'financials':repr(self.__financials)}
-        content.update({field:getattr(self, field) for field in self._fields if field not in content.keys()})
+        content.update({field:str(getattr(self, field)) for field in self._fields if field not in content.keys()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
     __instances = {} 
@@ -71,12 +71,16 @@ class Household(ntuple('Household', 'date geography age race language education 
             cls.__instances[key].addcount()
             return cls.__instances[key]
     
-    def todict(self): return self._asdict()
-    def __getitem__(self, field): return self.todict()[field]
-    def __getattr__(self, field): return getattr(self, field)
     def __init__(self, *args, financials, utility, variables, **kwargs): 
         self.__utility, self.__financials = utility, financials              
-        self.__variables = variables
+        self.__variables = variables    
+    
+    def todict(self): return self._asdict()
+    def __getitem__(self, item): 
+        if isinstance(item, (int, slice)): return super().__getitem__(item)
+        elif isinstance(item, str): return getattr(self, item)
+        else: raise TypeError(type(item))
+
     
 
 

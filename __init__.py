@@ -94,7 +94,7 @@ def createHousings(environment, *inputArgs, date, **inputParms):
 
 def display(items, maxcount=10):
     for count, item in enumerate(items):
-        print('/n'.join([str(item), repr(item), '\n']))
+        print(str(item))
         if count >= maxcount: break
 
 

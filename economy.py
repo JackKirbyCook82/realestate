@@ -32,10 +32,10 @@ _aslist = lambda items: [items] if isinstance(items, Number) else items
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 _curve = lambda x, y, z: interp1d(x, y, kind='linear', bounds_error=False, fill_value=(y[np.argmin(x)], z)) 
 
-_payment = lambda x, r, n: x * (r * pow(1 + r, n)) / (pow(1 + r, n) - 1)
-_balance = lambda x, r, n: x * (pow(1 + r, n) - pow(1 + r, n)) / (pow(1 + r, n) - 1)  
-_downpayment = lambda x, ltv: x * (1 - ltv)
-_financingcost = lambda x, r: x * (1 + r)
+payment = lambda x, r, n: x * (r * pow(1 + r, n)) / (pow(1 + r, n) - 1)
+balance = lambda x, r, n: x * (pow(1 + r, n) - pow(1 + r, n)) / (pow(1 + r, n) - 1)  
+downpayment = lambda x, ltv: x * (1 - ltv)
+financingcost = lambda x, r: x * (1 + r)
 
 
 @keydispatcher
@@ -54,14 +54,8 @@ class Economy(ntuple('Economy', 'geography date rates schools banks broker')):
 
 class Rate(object): 
     def __repr__(self): return '{}(curve={}, basis={})'.format(self.__class__.__name__, repr(self.__curve), self.__basis)
-    def __init__(self, curve, *args, basis='year', **kwargs): 
-        self.__curve = curve
-        self.__basis = basis
-    
-    def __call__(self, date, *args, basis='month', **kwargs): 
-        rate = self.__curve(date)
-        factor = _convertrate(self.__basis, basis, date)
-        return pow((1 + rate), factor) - 1
+    def __init__(self, curve, *args, basis='year', **kwargs): self.__curve, self.__basis = curve, basis
+    def __call__(self, date, *args, basis='month', **kwargs): return _convertrate(self.__basis, basis, self.__curve(date)[()])
     
     @classmethod
     def fromcurve(cls, curve, *args, **kwargs): return cls(curve, *args, **kwargs)     
@@ -85,13 +79,13 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         return super().__new__(cls, *args, _convertrate(basis, 'month', rate), _convertduration(basis, 'month', duration), **kwargs)    
     
     @property
-    def payment(self): return _payment(self.balance, self.rate, self.duration)
+    def payment(self): return payment(self.balance, self.rate, self.duration)
     @property
     def interest(self): return self.balance * self.rate
     @property
     def principal(self): return self.payment - self.interest
     
-    def projection(self, duration): return self.__class__(self.type, _balance(self.balance, self.rate, self.duration), self.rate, max(self.duration - duration, 0))
+    def projection(self, duration): return self.__class__(self.type, balance(self.balance, self.rate, self.duration), self.rate, max(self.duration - duration, 0))
     def payoff(self): return self.projection(self.duration)
     
     
@@ -122,8 +116,8 @@ class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
 
     def loan(self, amount): return Loan(self.type, amount, self.rate, self.duration)
     def qualify(self, coverage): return coverage >= self.coverage
-    def downpayment(self, value): return _downpayment(value, self.loantovalue)
-    def cost(self, amount): return _financingcost(amount, self.financing)
+    def downpayment(self, value): return downpayment(value, self.loantovalue)
+    def cost(self, amount): return financingcost(amount, self.financing)
 
 
 

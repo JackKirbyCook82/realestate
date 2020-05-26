@@ -13,10 +13,9 @@ from variables import Geography, Date
 from parsers import ListParser, DictParser
 from utilities.inputparsers import InputParser
 from utilities.concepts import concept
-from utilities.stats import MonteCarlo
 from uscensus import process, renderer
 
-from realestate.feed import Feed, Environment
+from realestate.feed import Feed, Environment, MonteCarlo
 from realestate.economy import Bank, School, Broker, Economy
 from realestate.households import createHousehold
 from realestate.housing import createHousing
@@ -28,7 +27,8 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-RATE_CONSTANTS = {'wealthrate':0.05, 'discountrate':0.03, 'riskrate':2}
+RATES = {'wealthrate':0.05, 'discountrate':0.03, 'riskrate':2}
+AGES = {'adulthood':15, 'retirement':65, 'death':95} 
 
 RATE_TABLES = {'incomerate':'Δ%avginc|geo', 'valuerate':'Δ%avgval|geo@owner', 'rentrate':'Δ%avgrent|geo@renter'}
 HOUSEHOLD_TABLES = {'household':'#hh|geo', 'income':'#hh|geo|~inc', 'value':'#hh|geo|equity', 'rent':'#hh|geo|lease', 'age':'#hh|geo|~age', 'size':'#hh|geo|~size', 'children':'#hh|geo|child'}
@@ -65,42 +65,45 @@ banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':de
 def createHousings(environment, *inputArgs, date, **inputParms):
     count = environment['count'](date=date)['structure']
     for geography, in environment.iterate('geography'):
-        if count[geography] <= 0: print('Empty Geography: {}\n, {} Structures'.format(str(geography), count[geography]))
+        if count[geography] <= 0: print('Empty Geography: {}, {} Structures\n'.format(str(geography), count[geography]))
         else: 
             housings = environment['housing'](geography=geography, date=date)
             sampler = MonteCarlo(**housings.todict()) 
             rates = dict(value=environment['rate'](geography=geography)['valuerate'], rent=environment['rate'](geography=geography)['rentrate'])
             content = dict(crime=environment['crime'](geography=geography, date=date), school=environment['school'](geography=geography, date=date), 
                            proximity=environment['proximity'](geography=geography, date=date), community=environment['community'](geography=geography, date=date))
-            economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, method='average', basis='year')
+            economy = Economy(geography, date, ages=AGES, broker=broker, schools=schools, banks=banks, rates=rates, method='average', basis='year')
             for index, values in sampler(count[geography]):               
                 yield createHousing(geography, date, sqftprice=100, sqftrent=1, sqftcost=0.5, economy=economy, **values, **content)             
              
-
 def createHouseholds(environment, *inputArgs, date, **inputParms):
     count = environment['count'](date=date)['household']
     for geography, in environment.iterate('geography'):
-        if count[geography] <= 0: print('Empty Geography: {}\n, {} Households'.format(str(geography), count[geography]))
+        if count[geography] <= 0: print('Empty Geography: {}, {} Households\n'.format(str(geography), count[geography]))
         else: 
             households = environment['household'](geography=geography, date=date)
             sampler = MonteCarlo(**households.todict())
-            rates=dict(wealth=RATE_CONSTANTS['wealthrate'], discount=RATE_CONSTANTS['discountrate'], risk=RATE_CONSTANTS['riskrate'], 
+            rates=dict(wealth=RATES['wealthrate'], discount=RATES['discountrate'], risk=RATES['riskrate'], 
                        income=environment['rate'](geography=geography)['incomerate'], value=environment['rate'](geography=geography)['valuerate'])
-            economy = Economy(geography, date, broker=broker, schools=schools, banks=banks, rates=rates, method='average', basis='year')
+            economy = Economy(geography, date, ages=AGES, broker=broker, schools=schools, banks=banks, rates=rates, method='average', basis='year')
             for index, values in sampler(count[geography]): 
                 yield createHousehold(geography, date, horizon=5, economy=economy, **values)
-                
 
-def display(items, maxcount=10):
+
+def display(items):
     for count, item in enumerate(items):
-        print(str(item))
-        if count >= maxcount: break
+        if count <= 10: print(str(item))
+        else: break
+    print(items[0].counts())
 
 
 def main(*inputArgs, **inputParms):
     environment = Environment(concepts, **feed(*inputArgs, **inputParms))
-    display([housing for housing in createHousings(environment, *inputArgs, **inputParms)])
-    display([household for household in createHouseholds(environment, *inputArgs, **inputParms)])
+    housings = [housing for housing in createHousings(environment, *inputArgs, **inputParms)]
+    households = [household for household in createHouseholds(environment, *inputArgs, **inputParms)]
+    
+    display(housings)
+    display(households)
     
 
 if __name__ == '__main__':  

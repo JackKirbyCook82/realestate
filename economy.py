@@ -46,10 +46,10 @@ def createcurve_average(x, y, *args, weights=None, **kwargs): return _curve(x, y
 def createcurve_last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
 
 
-class Economy(ntuple('Economy', 'geography date rates schools banks broker')):
-    def __new__(cls, geography, date, *args, rates, schools, banks, broker, **kwargs):
+class Economy(ntuple('Economy', 'geography date ages rates schools banks broker')):
+    def __new__(cls, geography, date, *args, ages, rates, schools, banks, broker, **kwargs):
         rates = {key:(Rate.fromcurve(value, *args, **kwargs) if hasattr(value, '__call__') else Rate.frompoint(date.year, value, *args, **kwargs)) for key, value in rates.items()}
-        return super().__new__(cls, geography, date, rates, schools, banks, broker)
+        return super().__new__(cls, geography, date, ages, rates, schools, banks, broker)
 
 
 class Rate(object): 
@@ -73,7 +73,7 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     stringformat = 'Loan|{type} ${balance:.0f} for {duration:.0f}MO @{rate:.2f}%/MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
-    def __hash__(self): return hash((self.__class__.__name__, self.type, self.balance, self.rate, self.duration,))       
+#    def __hash__(self): raise Exception('HASH TABLE REQUIRED')
     
     def __new__(cls, *args, rate, duration, basis='month', **kwargs): 
         return super().__new__(cls, *args, _convertrate(basis, 'month', rate), _convertduration(basis, 'month', duration), **kwargs)    

@@ -22,12 +22,9 @@ def createHousehold(geography, date, *args, **kwargs):
     financials = createFinancials(geography, date, *args, **kwargs)
     utility = createUtility(geography, date, *args, **kwargs)
     return Household(*args, geography=geography, date=date, financials=financials, utility=utility, **kwargs)    
-
-def createHouseholdKey(*args, date, geography, age, race, language, education, children, size, utility, financials, **kwargs):
-    basis = (hash(date), hash(geography),)
-    identity = (age, race, language, education, children, size,)
-    content = (hash(utility), hash(financials),)
-    return ('Household', *basis, *identity, *content,) 
+    
+#def createHouseholdKey(*args, date, geography, age, race, language, education, children, size, **kwargs):
+#    return ('Household', hash(geography), hash(date), age.index, race.index, education.index, children.index, size.index,) 
 
     
 class PrematureHouseholderError(Exception): pass
@@ -35,36 +32,37 @@ class DeceasedHouseholderError(Exception): pass
 
 
 class Household(ntuple('Household', 'date geography age race language education children size')):
-    __instances = {}     
-    __ages = {'adulthood':15, 'retirement':65, 'dealth':95} 
-
-    stringformat = 'Household|{age} {education} {race} w/{size} speaking {lanuguage} {children}, [{count}]'      
+#    __instances = {}     
+    __stringformat = 'Household[count]|{language} speaking {race}, {age}, {children} {size}, {education} education'          
     def __str__(self): 
-        householdstring = self.stringformat.format(count=self.count, age=self.age, race=self.race, language=self.language, education=self.education, children=self.children, size=self.size)
+        householdstring = self.__stringformat.format(count=self.count, age=self.age, race=self.race, language=self.language, education=self.education, children=self.children, size=self.size)
         financialstring = str(self.__financials)
         return '\n'.join([householdstring, financialstring])        
     
-    def __hash__(self): return hash(createHouseholdKey(**self.todict()))    
+#    def __hash__(self): raise Exception('HASH TABLE REQUIRED')
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography), 'utility':repr(self.__utility), 'financials':repr(self.__financials)}
-        content.update({field:str(getattr(self, field)) for field in self._fields if field not in content.keys()})
+        content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
-    @property
-    def count(self): return self.__count
-    def addcount(self): self.__count += 1
+#    @classmethod
+#    def counts(cls): return [instance.count for instance in cls.__instances.values()]
+
+#    @property
+#    def count(self): return self.__count
+#    def addcount(self): self.__count += 1
     
-    def __new__(cls, *args, age, **kwargs):
-        if age < cls.__ages['adulthood']: raise PrematureHouseholderError()
-        if age > cls.__ages['death']: raise DeceasedHouseholderError()              
-        key = createHouseholdKey(*args, **kwargs)
-        if hash(key) in cls.__instances: 
-            cls.__instances[key].addcount()
-            return cls.__instances[key]
-        else:
-            newinstance = super().__new__(cls, age=age, **{field:kwargs[field] for field in cls._fields})
-            cls.__instances[key] = newinstance
-            return newinstance
+#    def __new__(cls, *args, economy, **kwargs):
+#        if kwargs['age'].value < economy.ages['adulthood']: raise PrematureHouseholderError()
+#        if kwargs['age'].value > economy.ages['death']: raise DeceasedHouseholderError()              
+#        key = createHouseholdKey(*args, **kwargs)
+#        if hash(key) in cls.__instances.keys(): 
+#            cls.__instances[key].addcount()
+#            return cls.__instances[key]
+#        else:
+#            newinstance = super().__new__(cls, **{field:kwargs[field] for field in cls._fields})
+#            cls.__instances[key] = newinstance
+#            return newinstance
     
     def __init__(self, *args, financials, utility, **kwargs): 
         self.__utility, self.__financials = utility, financials                 

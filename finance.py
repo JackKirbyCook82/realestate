@@ -32,35 +32,15 @@ consumption_factor = lambda tr, wr, n: pow(1 + tr, n) / (tr - wr)
 loan_factor = lambda lr, wr, n: (lr / wr) * (pow(1 + lr, n) / (1 - pow(1 + lr, n)))
   
 
-def createFinancials(geography, date, *args, horizon, age, education, income, value, yearoccupied, economy, **kwargs): 
-    start_school = economy.schools[str(education).lower()]
-    start_age = economy.ages['adulthood'] + start_school.duration     
-    start_year = date.year - age.value - start_school.duration    
-    start_income = income / np.prod(np.array([1 + economy.rates['income'](i, basis='year') for i in range(start_year, date.year)]))
-    start_studentloan = economy.banks['studentloan'].loan(start_school.cost)   
-    assert start_age <= age.value and start_year <= date.year
-    
-    purchase_age = age - date.year - yearoccupied.value
-    purchase_year = yearoccupied.value    
-    purchase_value = value / np.prod(np.array([1 + economy.valuerate(i, basis='year') for i in range(purchase_year,  date.year)]))            
-    purchase_downpayment = economy.banks['mortgage'].downpayment(purchase_value)
-    purchase_cost = economy.banks['mortgage'].cost(purchase_value - purchase_downpayment)
-    purchase_cash = purchase_downpayment - purchase_cost    
-    assert start_year <= purchase_year <= date.year and start_age <= purchase_age <= age.value
-    
-    targets = {purchase_age - start_age:purchase_cash}
+def createFinancials(geography, date, *args, economy, **kwargs): 
+    start_age = economy.ages['adulthood']
     horizon = max(economy.ages['death'] - start_age, 0)
     incomehorizon = max(economy.ages['retirement'] - start_age, 0)
     rates = {'{}rate'.format(key):rate(date.year, basis='month') for key, rate in economy.rates.items()}
-    financials = Financials(horizon, incomehorizon, targets=targets, terminalwealth=0, income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, **rates)
-    financials = financials.projection(max(purchase_age - start_age, 0), basis='month')
-    financials = financials.buy(purchase_value, bank=economy.banks['mortgage'])
-    financials = financials.projection(max(age.value - purchase_age, 0), basis='month')    
-    return financials    
- 
-#def createFinancialsKey(*args, horizon, incomehorizon, income, consumption, rates, loans, assets, **kwargs):
-#    return ('Financials', horizon, incomehorizon, *rates, income, consumption, *assets, *loans,) 
-
+    money = dict(income=100000, wealth=50000, value=50000)
+    loans = dict(mortgage=None, studentloan=None, debt=None)
+    return Financials(horizon, incomehorizon, **money, **rates, **loans)
+    
 
 class InsufficientFundsError(Exception): pass
 class InsufficientCoverageError(Exception): pass
@@ -72,7 +52,6 @@ class Financials(ntuple('Financials', 'horizon incomehorizon discountrate riskra
     __stringformat = 'Financials|Assets=${assets:.0f}, Debt=${debt:.0f}, Income=${income:.0f}/MO, Consumption=${consumption:.0f}/MO'
     def __str__(self): return self.__stringformat(assets=self.wealth + self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance, consumption=self.consumption)     
     
-#    def __hash__(self): raise Exception('HASH TABLE REQUIRED')
     def __repr__(self): 
         content = {'mortgage':repr(self.mortgage), 'studentloan':repr(self.studentloan), 'debt':repr(self.debt)}
         content.update({field:str(getattr(self, field)) for field in self._fields if field not in content.keys()})

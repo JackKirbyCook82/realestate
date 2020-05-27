@@ -90,20 +90,10 @@ def createHouseholds(environment, *inputArgs, date, **inputParms):
                 yield createHousehold(geography, date, horizon=5, economy=economy, **values)
 
 
-def display(items):
-    for count, item in enumerate(items):
-        if count <= 10: print(str(item))
-        else: break
-    print(items[0].counts())
-
-
 def main(*inputArgs, **inputParms):
     environment = Environment(concepts, **feed(*inputArgs, **inputParms))
-    housings = [housing for housing in createHousings(environment, *inputArgs, **inputParms)]
-    households = [household for household in createHouseholds(environment, *inputArgs, **inputParms)]
-    
-    display(housings)
-    display(households)
+    housings = {housing for housing in createHousings(environment, *inputArgs, **inputParms)}
+    households = {household for household in createHouseholds(environment, *inputArgs, **inputParms)}
     
 
 if __name__ == '__main__':  

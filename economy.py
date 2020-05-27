@@ -73,7 +73,6 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     stringformat = 'Loan|{type} ${balance:.0f} for {duration:.0f}MO @{rate:.2f}%/MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
-#    def __hash__(self): raise Exception('HASH TABLE REQUIRED')
     
     def __new__(cls, *args, rate, duration, basis='month', **kwargs): 
         return super().__new__(cls, *args, _convertrate(basis, 'month', rate), _convertduration(basis, 'month', duration), **kwargs)    

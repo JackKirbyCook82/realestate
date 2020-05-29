@@ -137,7 +137,7 @@ class Environment(object):
     
     @__getrate.register(int, float, Number)
     def __getrateNumber(self, rate, date, *args, extrapolate='average', basis='year', **kwargs):
-        return Rate(rate, date.index, extrapolate=extrapolate, basis=basis)     
+        return Rate(date.index, rate, extrapolate=extrapolate, basis=basis)     
 
 
 class MonteCarlo(object):

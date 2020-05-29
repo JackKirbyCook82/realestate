@@ -87,7 +87,7 @@ class Data(object):
 
 class Environment(object):
     __counttables = ('households', 'structures', 'population')
-    __ratetables = ('riskrate', 'discountrate', 'incomerate', 'wealthrate', 'valuerate', 'rentrate')
+    __ratetables = ('discountrate', 'incomerate', 'wealthrate', 'valuerate', 'rentrate')
     
     @property
     def geography(self): return self.__geography

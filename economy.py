@@ -54,9 +54,9 @@ class Rate(ntuple('Rate', 'x y basis')):
             except: raise TypeError(type(x), type(y))
         return super().__new__(cls, x, y, basis)
     
-    def __repr__(self): return '{}(x={}, y={}, basis={})'.format(self.__class__.__name__, self.__x, self.__y, self.__basis)
+    def __repr__(self): return '{}(x={}, y={}, basis={})'.format(self.__class__.__name__, self.x, self.y, self.basis)
     def __init__(self, *args, extrapolate='average', **kwargs): self.__curve = createcurve(extrapolate, self.x, self.y, *args, **kwargs)
-    def __call__(self, x, *args, basis, **kwargs): return _convertrate(self.basis, basis, self.__curve(x)[()])
+    def __call__(self, x, *args, units, **kwargs): return _convertrate(self.basis, units, self.__curve(x))
             
     
 class Loan(ntuple('Loan', 'type balance rate duration')):

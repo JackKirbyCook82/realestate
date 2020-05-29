@@ -27,7 +27,7 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-RATES = {'wealthrate':0.05, 'discountrate':0.03, 'riskrate':2}
+RATES = {'wealthrate':0.05, 'discountrate':0.03}
 AGES = {'adulthood':15, 'retirement':65, 'death':95} 
 
 RATE_TABLES = {'incomerate':'Δ%avginc|geo', 'valuerate':'Δ%avgval|geo@owner', 'rentrate':'Δ%avgrent|geo@renter'}
@@ -67,14 +67,13 @@ def createHousings(environment):
         rates = dict(valuerate=environment['valuerate'], rentrate=environment['rentrate'])
         content = dict(crime=environment['crime'], school=environment['school'], proximity=environment['proximity'], community=environment['community'])
         for index, values in housingsampler(environment['structures']):               
-            yield createHousing(environment.geography, environment.date, sqftprice=100, sqftrent=1, sqftcost=0.5, ages=AGES, **rates, **values, **content)   
-        
+            yield createHousing(environment.geography, environment.date, sqftprice=100, sqftrent=1, sqftcost=0.5, ages=AGES, **rates, **values, **content)        
 
 def createHouseholds(environment):        
     if environment['households'] <= 0: print('Empty Geography: {}, {} Households\n'.format(str(environment.geography), environment['households']))
     else: 
         householdsampler = MonteCarlo(**environment['household'].todict())
-        rates = dict(wealthrate=environment['wealthrate'], discountrate=environment['discountrate'], riskrate=environment['riskrate'], incomerate=environment['incomerate'], valuerate=environment['valuerate'])
+        rates = dict(wealthrate=environment['wealthrate'], discountrate=environment['discountrate'], incomerate=environment['incomerate'], valuerate=environment['valuerate'])
         for index, values in householdsampler(environment['households']): 
             yield createHousehold(environment.geography, environment.date, horizon=5, ages=AGES, **rates, **values)
         

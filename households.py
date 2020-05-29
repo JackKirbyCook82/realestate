@@ -18,10 +18,11 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousehold(geography, date, *args, **kwargs):
-    financials = createFinancials(geography, date, *args, **kwargs)
+def createHousehold(geography, date, *args, **kwargs):    
+    rates = {ratekey:kwargs.pop(ratekey)(date.index, units='month') for ratekey in ('discountrate', 'wealthrate', 'valuerate', 'incomerate',)}
+    financials = createFinancials(geography, date, *args, **rates, **kwargs)
     utility = createUtility(geography, date, *args, **kwargs)
-    return Household(*args, geography=geography, date=date, financials=financials, utility=utility, **kwargs)    
+    return Household(*args, geography=geography, date=date, financials=financials, utility=utility, **rates, **kwargs)    
 
 def createHouseholdKey(*args, age, race, language, education, children, size, **kwargs):
     return (age.index, race.index, language.index, education.index, children.index, size.index,)
@@ -63,8 +64,10 @@ class Household(ntuple('Household', 'date geography age race language education 
             cls.__instances[key] = newinstance
             return newinstance
     
-    def __init__(self, *args, financials, utility, **kwargs): 
+    def __init__(self, *args, financials, utility, discountrate, riskrate, wealthrate, valuerate, incomerate, **kwargs): 
         self.__utility, self.__financials = utility, financials                 
+        self.__discountrate, self.__riskrate = discountrate, riskrate
+        self.__wealthrate, self.__valuerate, self.__incomerate = wealthrate, valuerate, incomerate
         try: self.__count = self.__count + 1
         except AttributeError: self.__count = 1
     

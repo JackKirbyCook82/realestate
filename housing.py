@@ -18,6 +18,7 @@ __license__ = ""
 
 
 def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, rentrate, valuerate, **kwargs):    
+    rentrate, valuerate = rentrate(date.index, units='month'), valuerate(date.index, units='month')
     space = Space(dict(unit=unit, bedrooms=bedrooms, rooms=rooms, sqft=sqft))
     quality = Quality(dict(yearbuilt=yearbuilt))
     return Housing(*args, date=date, geography=geography, space=space, quality=quality, rentrate=rentrate, valuerate=valuerate, **kwargs)
@@ -40,7 +41,6 @@ class Housing(ntuple('Housing', 'date geography crime school space community pro
         content.update({'crime':repr(self.crime), 'school':repr(self.school), 'space':repr(self.space), 'community':repr(self.community), 'proximity':repr(self.proximity), 'quality':repr(self.quality)})
         content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
         content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice), 'sqftcost':str(self.__sqftcost)})
-        content.update({'rentrate':str(self.__rentrate), 'valuerate':str(self.__valuerate)})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
     @property

@@ -17,11 +17,9 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, economy, **kwargs):    
+def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, rentrate, valuerate, **kwargs):    
     space = Space(dict(unit=unit, bedrooms=bedrooms, rooms=rooms, sqft=sqft))
     quality = Quality(dict(yearbuilt=yearbuilt))
-    rentrate = economy.rates['rent'](date.year) 
-    valuerate = economy.rates['value'](date.year)
     return Housing(*args, date=date, geography=geography, space=space, quality=quality, rentrate=rentrate, valuerate=valuerate, **kwargs)
 
 def createHousingKey(*args, geography, date, space, quality, **kwargs):
@@ -32,7 +30,7 @@ Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'])
 Quality = concept('quality', ['yearbuilt'])
 
 
-class Housing(ntuple('Housing', 'date geography rentrate valuerate crime school space community proximity quality')):
+class Housing(ntuple('Housing', 'date geography crime school space community proximity quality')):
     __instances = {}     
     __stringformat = 'Housing[{count}]|{unit} w/ {sqft} in {geography} builtin {year}, ${rent:.0f}/MO Rent, ${price:.0f} Purchase, ${cost:.0f}/MO Cost'           
     def __str__(self): return self.__stringformat.format(count=self.count, unit=self.unit, sqft=self.sqft, year=self.year, geography=str(self.geography), rent=self.rentercost, price=self.price, cost=self.ownercost)  
@@ -41,7 +39,8 @@ class Housing(ntuple('Housing', 'date geography rentrate valuerate crime school 
         content = {'date':repr(self.date), 'geography':repr(self.geography)} 
         content.update({'crime':repr(self.crime), 'school':repr(self.school), 'space':repr(self.space), 'community':repr(self.community), 'proximity':repr(self.proximity), 'quality':repr(self.quality)})
         content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
-        content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice)})
+        content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice), 'sqftcost':str(self.__sqftcost)})
+        content.update({'rentrate':str(self.__rentrate), 'valuerate':str(self.__valuerate)})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
     @property
@@ -61,8 +60,9 @@ class Housing(ntuple('Housing', 'date geography rentrate valuerate crime school 
             cls.__instances[key] = newinstance
             return newinstance
 
-    def __init__(self, *args, sqftprice, sqftrent, sqftcost, **kwargs): 
+    def __init__(self, *args, sqftprice, sqftrent, sqftcost, rentrate, valuerate, **kwargs): 
         self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost     
+        self.__rentrate, self.__valuerate = rentrate, valuerate
         try: self.__count = self.__count + 1
         except AttributeError: self.__count = 1
 

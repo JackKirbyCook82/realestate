@@ -53,9 +53,9 @@ class Household(ntuple('Household', 'date geography age race language education 
         if not isinstance(other, type(self)): raise TypeError(type(other))
         return hash(self) == hash(other)  
     
-    def __new__(cls, *args, economy, **kwargs):
-        if kwargs['age'].value < economy.ages['adulthood']: raise PrematureHouseholderError()
-        if kwargs['age'].value > economy.ages['death']: raise DeceasedHouseholderError()              
+    def __new__(cls, *args, ages, **kwargs):
+        if kwargs['age'].value < ages['adulthood']: raise PrematureHouseholderError()
+        if kwargs['age'].value > ages['death']: raise DeceasedHouseholderError()              
         key = hash(createHouseholdKey(*args, **kwargs))
         try: return cls.__instances[key]
         except KeyError: 

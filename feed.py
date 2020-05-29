@@ -8,13 +8,19 @@ Created on Mon Apr 27 2020
 
 import numpy as np
 import pandas as pd
+from numbers import Number
 from itertools import product
 from scipy.linalg import cholesky, eigh
 from collections import OrderedDict as ODict
 
+from tables.tables import EmptyHistArrayError
+from utilities.dispatchers import clstype_singledispatcher as typedispatcher
+
+from realestate.economy import Rate
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Feed', 'Environment', 'MonteCarlo']
+__all__ = ['Feed', 'Data', 'Environment', 'MonteCarlo']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -48,45 +54,90 @@ class Feed(object):
         return self.__calculations[tableID](*args, **kwargs)   
 
 
-class Environment(object):
+class Data(object):
     @property
-    def concepts(self): return self.__concepts   
-    @property
-    def dimensions(self): return self.__dimensions    
+    def axes(self): return self.__axes
     
-    def __init__(self, concepts, **tables): 
-        self.__concepts = concepts
-        self.__tables = tables
-        self.__dimensions = self.__getdimensions(**tables)
-    
-    def __getdimensions(self, **tables):
+    def __init__(self, **tables): self.__tables, self.__axes = tables, self.__getaxes(**tables)
+    def __getaxes(self, **tables):
         axiskeys = set(_flatten([table.headerkeys for table in tables.values()]))
         axiskeys = [axiskey for axiskey in axiskeys if all([axiskey in table.headers for table in tables.values()])]
         headers = list(tables.values())[0].headers
         return [axiskey for axiskey in axiskeys if all([set(headers[axiskey]) == set(table.headers[axiskey]) for table in list(tables.values())[1:]])]
-  
+
     def iterate(self, *axes):
-        assert all([axis in self.dimensions for axis in axes])
+        assert all([axis in self.__axes for axis in axes])
         for items in product(*[list(self.__tables.values())[0].headers[axis] for axis in axes]): yield items
-
+          
     def __getitem__(self, key):
-        assert key in self.concepts.keys()
-        def wrapper(*args, **kwargs): return self(key, *args, **kwargs)  
-        return wrapper  
-
-    def __call__(self, key, *args, **kwargs):
-        assert key in self.concepts.keys()
-        tables = self.__getTables(self.concepts[key]._fields, *args, **kwargs)
-        return self.concepts[key](tables, *args, **kwargs)
-
-    def __getTable(self, field, *args, **kwargs):
-        newscope = {key:kwargs[key] for key in self.__tables[field].headerkeys if key in kwargs.keys()}
-        table = self.__tables[field].sel(**newscope)
+        assert key in self.__tables.keys()
+        def wrapper(*args, **kwargs): return self(*args, key=key, **kwargs)
+        return wrapper
+    
+    def __call__(self, *args, key=None, **kwargs):
+        if not key: return {key:self.__gettable(key, *args, **kwargs) for key in self.__tables.keys()} 
+        else: return self.__gettable(key, *args, **kwargs)        
+        
+    def __gettable(self, key, *args, **kwargs):        
+        newscope = {axis:kwargs[axis] for axis in self.__tables[key].headerkeys if axis in kwargs.keys()}
+        table = self.__tables[key].sel(**newscope)
         for scopekey in newscope.keys(): table = table.squeeze(scopekey)
-        return table    
+        return table         
+        
 
-    def __getTables(self, fields, *args, **kwargs):
-        return {field:self.__getTable(field, *args, **kwargs) for field in _aslist(fields)}
+class Environment(object):
+    __counttables = ('households', 'structures', 'population')
+    __ratetables = ('riskrate', 'discountrate', 'incomerate', 'wealthrate', 'valuerate', 'rentrate')
+    
+    @property
+    def geography(self): return self.__geography
+    @property
+    def date(self): return self.__date
+    
+    @property
+    def counts(self): return self.__counts
+    @property
+    def rates(self): return self.__rates
+    @property
+    def histograms(self): return self.__histograms
+    @property
+    def concepts(self): return self.__concepts
+    
+    def __init__(self, geography, date, *args, tables, concepts={}, **kwargs):
+        assert isinstance(tables, dict) and isinstance(concepts, dict)
+        assert not any([key in tables.keys() for key in concepts.keys()])
+        assert all([table.scope['geography'][()] == geography for table in tables.values()])
+        self.__geography, self.__date = geography, date
+        
+        self.__histograms = {}
+        for tablekey, table in tables.items():
+            if tablekey not in (*self.__ratetables, *self.__counttables):
+                try: self.__histograms[tablekey] = self.__gethistogram(table, date, *args, **kwargs)
+                except EmptyHistArrayError: self.__histograms[tablekey] = None        
+        
+        self.__rates = {ratekey:self.__getrate(tables[ratekey] if ratekey in tables.keys() else kwargs[ratekey], date, *args, **kwargs) for ratekey in self.__ratetables}
+        self.__counts = {countkey:self.__getcount(tables[countkey], date, *args, **kwargs) for countkey in self.__counttables}
+        self.__concepts = {conceptkey:Concept(self.__histograms, *args, **kwargs) for conceptkey, Concept in concepts.items()}
+            
+    def __getitem__(self, key):
+        if key in self.__counts: return self.__counts[key]
+        elif key in self.__rates: return self.__rates[key]
+        elif key in self.__concepts: return self.__concepts[key]
+        elif key in self.__histograms: return self.__histograms[key]
+        else: raise KeyError(key)
+
+    def __getcount(self, table, date, *args, **kwargs): return table.sel(**{'date':date}).squeeze('date').arrays[table.datakeys[0]][()]    
+    def __gethistogram(self, table, date, *args, **kwargs): return table.sel(**{'date':date}).squeeze('date').tohistogram(*args, how='average', **kwargs)
+    
+    @typedispatcher
+    def __getrate(self, table, date, *args, extrapolate='average', basis='year', weights=None, **kwargs): 
+        try: table = table.tocurve(*args, how='average', **kwargs)           
+        except AttributeError: raise TypeError(type(table))
+        return Rate(table.xvalues, table.yvalues, w=weights, extrapolate=extrapolate, basis=basis)
+    
+    @__getrate.register(int, float, Number)
+    def __getrateNumber(self, rate, date, *args, extrapolate='average', basis='year', **kwargs):
+        return Rate(rate, date.index, extrapolate=extrapolate, basis=basis)     
 
 
 class MonteCarlo(object):
@@ -96,13 +147,15 @@ class MonteCarlo(object):
     def histograms(self): return list(self.__histograms.values())
     @property
     def variables(self): return {histogram.axiskey:histogram.axisvariable for histogram in self.__histograms.values()}
-    
+
     def __init__(self, **histograms):
         self.__histograms = ODict([(key, value) for key, value in histograms.items()])
         self.__correlationmatrix = np.zeros((len(histograms), len(histograms)))
         np.fill_diagonal(self.__correlationmatrix, 1)
         
     def samplematrix(self, size, *args, method='cholesky', **kwargs):
+        try: size = int(size)
+        except: size = size.astype('int64')
         samplematrix = np.array([histogram(size) for histogram in self.__histograms.values()]) 
         if method == 'cholesky':
             correlation_matrix = cholesky(self.__correlationmatrix, lower=True)
@@ -113,6 +166,8 @@ class MonteCarlo(object):
         return np.dot(correlation_matrix, samplematrix) 
     
     def sampledataframe(self, size, *args, **kwargs):
+        try: size = int(size)
+        except: size = size.astype('int64')
         samplematrix = self.samplematrix(size, *args, **kwargs)    
         sampletable = {key:list(values) for key, values in zip(self.keys, samplematrix)}
         return pd.DataFrame(sampletable)        

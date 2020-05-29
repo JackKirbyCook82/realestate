@@ -16,7 +16,7 @@ from utilities.strings import uppercase, dictstring
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Rate', 'Broker', 'Loan', 'School', 'Bank']
+__all__ = ['Rate', 'Broker', 'Loan', 'Education', 'Bank']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -41,32 +41,22 @@ financingcost = lambda x, r: x * (1 + r)
 @keydispatcher
 def createcurve(method, x, y, *args, **kwargs): raise KeyError(method)
 @createcurve.register('average')
-def createcurve_average(x, y, *args, weights=None, **kwargs): return _curve(x, y, np.average(y, weights=_normalize(weights) if weights else None))
+def createcurve_average(x, y, *args, **kwargs): return _curve(x, y, np.average(y, weights=None))
 @createcurve.register('last')
 def createcurve_last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
 
 
-class Economy(ntuple('Economy', 'geography date ages rates schools banks broker')):
-    def __new__(cls, geography, date, *args, ages, rates, schools, banks, broker, **kwargs):
-        rates = {key:(Rate.fromcurve(value, *args, **kwargs) if hasattr(value, '__call__') else Rate.frompoint(date.year, value, *args, **kwargs)) for key, value in rates.items()}
-        return super().__new__(cls, geography, date, ages, rates, schools, banks, broker)
-
-
-class Rate(object): 
-    def __repr__(self): return '{}(curve={}, basis={})'.format(self.__class__.__name__, repr(self.__curve), self.__basis)
-    def __init__(self, curve, *args, basis='year', **kwargs): self.__curve, self.__basis = curve, basis
-    def __call__(self, date, *args, basis='month', **kwargs): return _convertrate(self.__basis, basis, self.__curve(date)[()])
+class Rate(ntuple('Rate', 'x y basis')):
+    def __new__(cls, x, y, *args, basis, **kwargs):
+        if isinstance(x, np.ndarray) and isinstance(y, np.ndarray): assert x.shape == y.shape
+        else:
+            try: x, y = np.array([x, x]), np.array([y, y]) 
+            except: raise TypeError(type(x), type(y))
+        return super().__new__(cls, x, y, basis)
     
-    @classmethod
-    def fromcurve(cls, curve, *args, **kwargs): return cls(curve, *args, **kwargs)     
-    @classmethod
-    def fromvalues(cls, x, y, *args, method='average', **kwargs): 
-        curve = createcurve(method, x, y, *args, **kwargs)
-        return cls(curve, *args, **kwargs)
-    @classmethod
-    def frompoint(cls, x, y, *args, **kwargs): 
-        curve = createcurve('last', [x, x], [y, y], *args, **kwargs)
-        return cls(curve, *args, **kwargs)
+    def __repr__(self): return '{}(x={}, y={}, basis={})'.format(self.__class__.__name__, self.__x, self.__y, self.__basis)
+    def __init__(self, *args, extrapolate='average', **kwargs): self.__curve = createcurve(extrapolate, self.x, self.y, *args, **kwargs)
+    def __call__(self, x, *args, basis, **kwargs): return _convertrate(self.basis, basis, self.__curve(x)[()])
             
     
 class Loan(ntuple('Loan', 'type balance rate duration')):
@@ -95,8 +85,8 @@ class Broker(ntuple('Broker', 'commisions')):
     def cost(self, amount): return amount * (1 + self.commisions)    
  
     
-class School(ntuple('Education', 'type cost duration')):
-    stringformat = 'School|{type} costing ${cost:.0f} over {duration:.0f} MOS' 
+class Education(ntuple('Education', 'type cost duration')):
+    stringformat = 'Education|{type} costing ${cost:.0f} over {duration:.0f} MOS' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
     

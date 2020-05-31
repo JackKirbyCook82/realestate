@@ -21,7 +21,7 @@ _filterempty = lambda items: [item for item in _aslist(items) if item]
 
 
 def createUtility(*args, **kwargs):
-    consumption = UtilityIndex.create('cosumption', *args, amplitude=1, tolerances={}, **kwargs)
+    consumption = UtilityIndex.create('consumption', *args, amplitude=1, tolerances={}, **kwargs)
     crime = UtilityIndex.create('crime', *args, amplitude=1, tolerances={}, **kwargs)
     school = UtilityIndex.create('school', *args, amplitude=1, tolerances={}, **kwargs)
     quality = UtilityIndex.create('quality', *args, amplitude=1, tolerances={}, **kwargs)
@@ -75,7 +75,7 @@ class Space_UtilityIndex:
                 'sqft/bedroom':housing.space.sqft * (1-(housing.space.bedrooms/housing.space.rooms)) / housing.space.bedrooms, 'unit':housing.space.unit}
 
 
-@UtilityIndex.register('space', 'inverted', {'avgcommute':1, 'midcommute':1, 'stdcommute':1})
+@UtilityIndex.register('proximity', 'inverted', {'avgcommute':1, 'midcommute':1, 'stdcommute':1})
 class Proximity_UtilityIndex: 
     def execute(self, housing, household, *args, **kwargs): 
         return {'avgcommute':housing.proximity.commute.mean(), 'midcommute':housing.proximity.commute.median(), 

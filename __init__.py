@@ -27,6 +27,7 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
+RISKTOLERANCE = 2
 RATES = {'wealthrate':0.05, 'discountrate':0.03}
 AGES = {'adulthood':15, 'retirement':65, 'death':95} 
 
@@ -75,7 +76,7 @@ def createHouseholds(environment):
         householdsampler = MonteCarlo(**environment['household'].todict())
         rates = dict(wealthrate=environment['wealthrate'], discountrate=environment['discountrate'], incomerate=environment['incomerate'], valuerate=environment['valuerate'])
         for index, values in householdsampler(environment['households']): 
-            yield createHousehold(environment.geography, environment.date, horizon=5, ages=AGES, **rates, **values)
+            yield createHousehold(environment.geography, environment.date, horizon=5, risktolerance=RISKTOLERANCE, ages=AGES, **rates, **values)
         
 
 def main(*inputArgs, date, **inputParms):
@@ -85,7 +86,14 @@ def main(*inputArgs, date, **inputParms):
         environment = Environment(geography, date, tables=tables, concepts=concepts, extrapolate='average', basis='year', **RATES)
         households = [household for household in createHouseholds(environment)]
         housings = [housing for housing in createHousings(environment)]
-        
+        break
+    for i, household in enumerate(households):
+        if i <= 10: print(str(household))
+        else: break
+    for i, housing in enumerate(housings):
+        if i <= 10: print(str(housing))
+        else: break
+    
 
 if __name__ == '__main__':  
     tbls.set_options(linewidth=100, maxrows=40, maxcolumns=10, threshold=100, precision=2, fixednotation=True, framechar='=')

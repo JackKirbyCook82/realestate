@@ -64,9 +64,9 @@ class Household(ntuple('Household', 'date geography age race language education 
             cls.__instances[key] = newinstance
             return newinstance
     
-    def __init__(self, *args, financials, utility, discountrate, riskrate, wealthrate, valuerate, incomerate, **kwargs): 
+    def __init__(self, *args, financials, utility, risktolerance, discountrate, wealthrate, valuerate, incomerate, **kwargs): 
         self.__utility, self.__financials = utility, financials                 
-        self.__discountrate, self.__riskrate = discountrate, riskrate
+        self.__discountrate, self.__risktolerance = discountrate, risktolerance
         self.__wealthrate, self.__valuerate, self.__incomerate = wealthrate, valuerate, incomerate
         try: self.__count = self.__count + 1
         except AttributeError: self.__count = 1

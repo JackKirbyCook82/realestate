@@ -22,7 +22,7 @@ __license__ = ""
 
 
 _convertKeys = ['year', 'month', 'week']
-_convertMatrix = np.array([[1, 12, 52], [-12, 1, 52/12], [-52, -52/12, 1]]) 
+_convertMatrix = np.array([[1, 1/12, 1/52], [12, 1, 12/52], [52, 52/12, 1]]) 
 _convertindex = lambda key: _convertKeys.index(key)
 _convertfactor = lambda fromvalue, tovalue: _convertMatrix[_convertindex(fromvalue), _convertindex(tovalue)]
 _convertrate = lambda frombasis, tobasis, rate: pow((1 + rate), _convertfactor(frombasis, tobasis)) - 1
@@ -30,7 +30,7 @@ _convertduration = lambda frombasis, tobasis, duration: duration * _convertfacto
 
 _aslist = lambda items: [items] if isinstance(items, Number) else items
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
-_curve = lambda x, y, z: interp1d(x, y, kind='linear', bounds_error=False, fill_value=(y[np.argmin(x)], z)) 
+_curve = lambda x, y, fill: interp1d(x, y, kind='linear', bounds_error=False, fill_value=fill) 
 
 payment = lambda x, r, n: x * (r * pow(1 + r, n)) / (pow(1 + r, n) - 1)
 balance = lambda x, r, n: x * (pow(1 + r, n) - pow(1 + r, n)) / (pow(1 + r, n) - 1)  
@@ -41,30 +41,33 @@ financingcost = lambda x, r: x * (1 + r)
 @keydispatcher
 def createcurve(method, x, y, *args, **kwargs): raise KeyError(method)
 @createcurve.register('average')
-def createcurve_average(x, y, *args, **kwargs): return _curve(x, y, np.average(y, weights=None))
+def createcurve_average(x, y, *args, **kwargs): return _curve(x, y, (np.average(y), np.average(y)))
 @createcurve.register('last')
-def createcurve_last(x, y, *args, **kwargs): return _curve(x, y, y[np.argmax(x)])   
+def createcurve_last(x, y, *args, **kwargs): return _curve(x, y, (y[np.argmin(x)], y[np.argmax(x)]))   
 
 
 class Rate(ntuple('Rate', 'x y basis')):
     def __new__(cls, x, y, *args, basis, **kwargs):
         if isinstance(x, np.ndarray) and isinstance(y, np.ndarray): assert x.shape == y.shape
         else:
-            try: x, y = np.array([x, x]), np.array([y, y]) 
+            try: x, y = np.array([x]), np.array([y]) 
             except: raise TypeError(type(x), type(y))
         return super().__new__(cls, x, y, basis)
     
     def __repr__(self): return '{}(x={}, y={}, basis={})'.format(self.__class__.__name__, self.x, self.y, self.basis)
-    def __init__(self, *args, extrapolate='average', **kwargs): self.__curve = createcurve(extrapolate, self.x, self.y, *args, **kwargs)
     def __call__(self, x, *args, units, **kwargs): return _convertrate(self.basis, units, self.__curve(x))
+    
+    def __init__(self, *args, extrapolate='average', **kwargs): 
+        if len(self.x) > 1: self.__curve = createcurve(extrapolate, self.x, self.y, *args, **kwargs)
+        else: self.__curve = lambda x: self.y[()] 
             
     
 class Loan(ntuple('Loan', 'type balance rate duration')):
     stringformat = 'Loan|{type} ${balance:.0f} for {duration:.0f}MO @{rate:.2f}%/MO' 
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})    
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
-    
-    def __new__(cls, *args, rate, duration, basis='month', **kwargs): 
+    def __bool__(self): return self.balance > 0
+    def __new__(cls, *args, rate, duration, basis, **kwargs): 
         return super().__new__(cls, *args, _convertrate(basis, 'month', rate), _convertduration(basis, 'month', duration), **kwargs)    
     
     @property
@@ -90,7 +93,7 @@ class Education(ntuple('Education', 'type cost duration')):
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
     
-    def __new__(cls, *args, duration, basis='year', **kwargs): 
+    def __new__(cls, *args, duration, basis, **kwargs): 
         return super().__new__(cls, *args, duration=_convertduration(basis, 'month', duration), **kwargs) 
 
     
@@ -99,7 +102,7 @@ class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
     def __str__(self): return self.stringformat.format(**{key:uppercase(value) if isinstance(value, str) else value for key, value in self._asdict().items()})          
     def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))
     
-    def __new__(cls, *args, rate, duration, financing=0, coverage=0, loantovalue=1, basis='year', **kwargs): 
+    def __new__(cls, *args, rate, duration, financing=0, coverage=0, loantovalue=1, basis, **kwargs): 
         rate, duration = _convertrate(basis, 'month', rate), _convertduration(basis, 'month', duration)
         return super().__new__(cls, *args, rate=rate, duration=duration, financing=financing, coverage=coverage, loantovalue=loantovalue, **kwargs)  
 

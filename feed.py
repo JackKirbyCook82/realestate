@@ -103,7 +103,7 @@ class Environment(object):
     @property
     def concepts(self): return self.__concepts
     
-    def __init__(self, geography, date, *args, tables, concepts={}, **kwargs):
+    def __init__(self, geography, date, *args, tables, concepts={}, basis, **kwargs):
         assert isinstance(tables, dict) and isinstance(concepts, dict)
         assert not any([key in tables.keys() for key in concepts.keys()])
         assert all([table.scope['geography'][()] == geography for table in tables.values()])
@@ -115,7 +115,7 @@ class Environment(object):
                 try: self.__histograms[tablekey] = self.__gethistogram(table, date, *args, **kwargs)
                 except EmptyHistArrayError: self.__histograms[tablekey] = None        
         
-        self.__rates = {ratekey:self.__getrate(tables[ratekey] if ratekey in tables.keys() else kwargs[ratekey], date, *args, **kwargs) for ratekey in self.__ratetables}
+        self.__rates = {ratekey:self.__getrate(tables[ratekey] if ratekey in tables.keys() else kwargs[ratekey], date, *args, basis=basis, **kwargs) for ratekey in self.__ratetables}
         self.__counts = {countkey:self.__getcount(tables[countkey], date, *args, **kwargs) for countkey in self.__counttables}
         self.__concepts = {conceptkey:Concept(self.__histograms, *args, **kwargs) for conceptkey, Concept in concepts.items()}
             
@@ -130,13 +130,13 @@ class Environment(object):
     def __gethistogram(self, table, date, *args, **kwargs): return table.sel(**{'date':date}).squeeze('date').tohistogram(*args, how='average', **kwargs)
     
     @typedispatcher
-    def __getrate(self, table, date, *args, extrapolate='average', basis='year', weights=None, **kwargs): 
+    def __getrate(self, table, date, *args, extrapolate, basis, weights=None, **kwargs): 
         try: table = table.tocurve(*args, how='average', **kwargs)           
         except AttributeError: raise TypeError(type(table))
         return Rate(table.xvalues, table.yvalues, w=weights, extrapolate=extrapolate, basis=basis)
     
     @__getrate.register(int, float, Number)
-    def __getrateNumber(self, rate, date, *args, extrapolate='average', basis='year', **kwargs):
+    def __getrateNumber(self, rate, date, *args, extrapolate, basis, **kwargs):
         return Rate(date.index, rate, extrapolate=extrapolate, basis=basis)     
 
 

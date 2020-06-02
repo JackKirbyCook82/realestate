@@ -17,11 +17,12 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, rentrate, valuerate, **kwargs):    
-    rentrate, valuerate = rentrate(date.index, units='month'), valuerate(date.index, units='month')
+def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, rates, **kwargs):    
     space = Space(dict(unit=unit, bedrooms=bedrooms, rooms=rooms, sqft=sqft))
     quality = Quality(dict(yearbuilt=yearbuilt))
-    return Housing(*args, date=date, geography=geography, space=space, quality=quality, rentrate=rentrate, valuerate=valuerate, **kwargs)
+    rentrate, valuerate = rates['rent'](date.index, units='month'), rates['value'](date.index, units='month')
+    rates = dict(rentrate=rentrate, valuerate=valuerate)
+    return Housing(*args, date=date, geography=geography, space=space, quality=quality, **rates, **kwargs)
 
 def createHousingKey(*args, geography, date, space, quality, **kwargs):
     return (geography.index, date.index, space.unit.index, space.bedrooms.index, space.rooms.index, space.sqft.index, quality.yearbuilt.index,)

@@ -18,96 +18,85 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-#_convertKeys = ['year', 'month', 'week']
-#_convertMatrix = np.array([[1, 12, 52], [-12, 1, 52/12], [-52, -52/12, 1]]) 
-#_convertindex = lambda key: _convertKeys.index(key)
-#_convertfactor = lambda fromvalue, tovalue: _convertMatrix[_convertindex(fromvalue), _convertindex(tovalue)]
-#_convertrate = lambda frombasis, tobasis, rate: pow((1 + rate), _convertfactor(frombasis, tobasis)) - 1
-#_convertduration = lambda frombasis, tobasis, duration: duration * _convertfactor(frombasis, tobasis)
-#_convertflow = lambda frombasis, tobasis, duration: duration / _convertfactor(frombasis, tobasis)
+iarray = lambda n: np.arange(n)
+rarray = lambda r, n: np.ones(n) * r
+farray = lambda r, n: rarray(r, n) ** iarray(n)
+dotarray = lambda x, y: np.dot(x, y)
 
 theta = lambda risk, dr, wr: (wr - dr) / risk
-wealth_factor = lambda wr, n: pow(1 + wr, n)
-value_factor = lambda ar, n: pow(1 + ar, n)
-income_factor = lambda ir, wr, n: pow(1 + ir, n) / (ir - wr)
-consumption_factor = lambda tr, wr, n: pow(1 + tr, n) / (tr - wr)
-loan_factor = lambda lr, wr, n: (lr / wr) * (pow(1 + lr, n) / (1 - pow(1 + lr, n)))
-  
-
-def createFinancials(geography, date, *args, ages, risktolerance, **kwargs): 
-    start_age = ages['adulthood']
-    horizon = max(ages['death'] - start_age, 0)
-    incomehorizon = max(ages['retirement'] - start_age, 0)
-    money = dict(income=100000/12, wealth=50000, value=100000)
-    loans = dict(mortgage=None, studentloan=None, debt=None)
-    kwargs.update(**money, **loans)
-    return Financials(horizon, incomehorizon, *args, risktolerance=risktolerance, **kwargs)
+wealth_factor = lambda wr, n: farray(1 + wr, n).sum()[()]
+income_factor = lambda ir, wr, n: dotarray(farray(1 + ir, n-1), farray(1 + wr, n-1)[::-1])[()]
+consumption_factor = lambda cr, wr, n: dotarray(farray(1 + cr, n-1), farray(1 + wr, n-1)[::-1])[()]
+loan_factor = lambda wr, n: farray(1 + wr, n-1).sum()[()]    
 
 
-#from variables import Geography, Date
-#RATES = {'wealthrate':0.002, 'discountrate':0.0005, 'incomerate':0.001, 'valuerate':0.01, }
-#AGES = {'adulthood':15, 'retirement':65, 'death':95} 
-#geography =Geography.fromstr('state=6|county=29|tract=*')
-#date = Date.fromstr('2018')
-#
-#x = createFinancials(geography, date, risktolerance=2, **RATES, ages=AGES)
-#print(repr(x))
-#print(str(x))
- 
+def createFinancials(geography, date, *args, horizon, age, yearoccupied, education, income, value, rates, ages, banks, educations, broker, **kwargs): 
+    start_school = educations[str(education).lower()]
+    start_age = int(ages['adulthood'] + (start_school.duration/12))   
+    start_year = int(date.year - (int(age) - start_age)) 
+    start_income = income / np.prod(np.array([1 + rates['income'](i, units='year') for i in range(start_year, date.year)]))
+    start_studentloan = banks['studentloan'].loan(start_school.cost)           
+    assert start_age <= int(age) <= ages['death'] 
+    assert start_year <= date.year
+
+    purchase_age = int(age) - (date.year - int(yearoccupied))
+    purchase_year = int(yearoccupied)  
+    purchase_value = value / np.prod(np.array([1 + rates['value'](i, units='year') for i in range(purchase_year,  date.year)]))            
+    purchase_downpayment = banks['mortgage'].downpayment(purchase_value)
+    purchase_cost = banks['mortgage'].cost(purchase_value - purchase_downpayment)
+    purchase_cash = purchase_downpayment + purchase_cost    
+    assert start_age <= purchase_age <= int(age) <= ages['death']
+    assert start_year <= purchase_year <= date.year 
     
-#def createFinancials(geography, date, *args, horizon, age, education, income, value, yearoccupied, economy, **kwargs): 
-#    start_school = economy.schools[str(education).lower()]
-#    start_age = economy.ages['adulthood'] + start_school.duration     
-#    start_year = date.year - age.value - start_school.duration    
-#    start_income = income / np.prod(np.array([1 + economy.rates['income'](i, basis='year') for i in range(start_year, date.year)]))
-#    start_studentloan = economy.banks['studentloan'].loan(start_school.cost)   
-#    assert start_age <= age.value and start_year <= date.year
-#    
-#    purchase_age = age - date.year - yearoccupied.value
-#    purchase_year = yearoccupied.value    
-#    purchase_value = value / np.prod(np.array([1 + economy.valuerate(i, basis='year') for i in range(purchase_year,  date.year)]))            
-#    purchase_downpayment = economy.banks['mortgage'].downpayment(purchase_value)
-#    purchase_cost = economy.banks['mortgage'].cost(purchase_value - purchase_downpayment)
-#    purchase_cash = purchase_downpayment - purchase_cost    
-#    assert start_year <= purchase_year <= date.year and start_age <= purchase_age <= age.value
-#    
-#    targets = {purchase_age - start_age:purchase_cash}
-#    horizon = max(economy.ages['death'] - start_age, 0)
-#    incomehorizon = max(economy.ages['retirement'] - start_age, 0)
-#    rates = {'{}rate'.format(key):rate(date.year, basis='month') for key, rate in economy.rates.items()}
-#    financials = Financials(horizon, incomehorizon, targets=targets, terminalwealth=0, income=start_income, wealth=0, value=0, mortgage=None, studentloan=start_studentloan, debt=None, **rates)
-#    financials = financials.projection(max(purchase_age - start_age, 0), basis='month')
-#    financials = financials.buy(purchase_value, bank=economy.banks['mortgage'])
-#    financials = financials.projection(max(age.value - purchase_age, 0), basis='month')    
-#    return financials   
+    discountrate = rates['discount'](date.index, units='month')
+    wealthrate = rates['wealth'](date.index, units='month')
+    valuerate = rates['value'](date.index, units='month')
+    incomerate = rates['income'](date.index, units='month')  
+    rates = dict(discountrate=discountrate, wealthrate=wealthrate, valuerate=valuerate, incomerate=incomerate)  
+
+    horizon = int((purchase_age - start_age) * 12)
+    incomehorizon = int((ages['retirement'] - start_age) * 12)
+    assets = dict(income=start_income, wealth=0, value=0)
+    loans = dict(studentloan=start_studentloan)
+    start_financials = Financials.fromTerminalWealth(horizon, incomehorizon, *args, terminalwealth=purchase_cash, **assets, **loans, **rates, **kwargs)
+    prepurchase_financials = Financials.fromProjection(horizon, incomehorizon, *args, financials=start_financials, **rates, **kwargs)
+    raise Exception()
+    purchase_financials = prepurchase_financials.buy(purchase_value, *args, bank=banks['mortgage'], **rates, **kwargs)
+    
+    horizon = int((int(age) - purchase_age) * 12)
+    incomehorizon = int((ages['retirement'] - start_age) * 12)
+    current_financials = Financials.fromProjection(horizon, incomehorizon, *args, financials=purchase_financials, **kwargs)
+    return current_financials
 
 
 class InsufficientFundsError(Exception): pass
 class InsufficientCoverageError(Exception): pass
-class UnstableLifeStyleError(Exception): pass
-class ExceededHorizonError(Exception): pass
+
+class UnstableLifeStyleError(Exception): 
+    def __init__(self, consumption): super().__init__('${}/MO'.format(int(abs(consumption))))
+    
+class UnsolventLifeStypeError(Exception):
+    def __init__(self, terminalwealth): super().__init__('${}'.format(int(abs(terminalwealth))))   
 
 
 class Financials(ntuple('Financials', 'income wealth value consumption mortgage studentloan debt')):
     __stringformat = 'Financials|Assets=${assets:.0f}, Debt=${debt:.0f}, Income=${income:.0f}/MO, Consumption=${consumption:.0f}/MO'
-    def __str__(self): return self.__stringformat.format(assets=self.wealth + self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance, consumption=self.consumption)     
+    def __str__(self): 
+        content = dict(assets=self.wealth + self.value, income=self.income, debt=self.mortgage.balance + self.studentloan.balance + self.debt.balance, consumption=self.consumption)
+        return self.__stringformat.format(**content)     
     
     def __repr__(self): 
         content = {'mortgage':repr(self.mortgage), 'studentloan':repr(self.studentloan), 'debt':repr(self.debt)}
         content.update({key:str(value) for key, value in self.todict().items() if key not in content.keys()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()])) 
 
-    def __new__(cls, duration, incomeduration, *args, targets={}, terminalwealth=0, **kwargs):            
-        assets = {assetkey:kwargs.pop(assetkey) for assetkey in ('income', 'wealth', 'value')}
-        loans = {loankey:kwargs.pop(loankey, Loan(loankey, 0, duration=0, rate=0, basis='month')) for loankey in ('mortgage', 'studentloan', 'debt')}
-        loans = {loankey:Loan(loankey, 0, duration=0, rate=0, basis='month') for loankey, loan in loans.items()}
-        consumption = cls.__consumption(duration, incomeduration, terminalwealth, *args, **assets, **loans, **kwargs)  
-        instance = super().__new__(cls, consumption=consumption, **assets, **loans)   
-        for targetduration in reversed(sorted(targets.keys())):            
-            if instance.wealthprojection(targetduration, *args, **kwargs) + instance.valueprojection(targetduration, *args, **kwargs) < targets[targetduration]: 
-                consumption = cls.__consumption(targetduration, incomeduration, targets[targetduration], *args, **assets, **loans, **kwargs)  
-                instance = super().__new__(cls, consumption=consumption, **assets, **loans) 
-        return instance  
+    def __new__(cls, *args, consumption, **kwargs):            
+        if consumption < 0: raise UnstableLifeStyleError(consumption)  
+        else: consumption = int(consumption)  
+        assets = {assetkey:int(kwargs.pop(assetkey)) for assetkey in ('income', 'wealth', 'value',)}
+        loans = {loankey:kwargs.pop(loankey, None) for loankey in ('mortgage', 'studentloan', 'debt',)}
+        loans = {loankey:(loan if loan is not None else Loan(loankey, balance=0, rate=0, duration=0, basis='month')) for loankey, loan in loans.items()}
+        return super().__new__(cls, **assets, consumption=consumption, **loans)   
 
     def todict(self): return self._asdict()
     def __getitem__(self, item): 
@@ -115,40 +104,27 @@ class Financials(ntuple('Financials', 'income wealth value consumption mortgage 
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
 
-    @classmethod
-    def __consumption(cls, duration, incomeduration, terminalwealth, *args, risktolerance, income, wealth, value, **kwargs):                  
-        discountrate, wealthrate, incomerate, valuerate = [kwargs[rate] for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate')]      
-        mortgage, studentloan, debt = [kwargs[loan] for loan in ('mortgage', 'studentloan', 'debt')]        
-        function = lambda items: np.array([x * y for x, y in items]).sum()
-        positives = [(wealth_factor(wealthrate, duration), wealth), (value_factor(valuerate, duration), value), (income_factor(incomerate, wealthrate, incomeduration), income)]
-        negatives = []
-        if mortgage: negatives.append((loan_factor(mortgage.rate, wealthrate, min(duration, mortgage.duration)), mortgage.balance))
-        if studentloan: negatives.append((loan_factor(studentloan.rate, wealthrate, min(duration, studentloan.duration)), studentloan.balance)) 
-        if debt: negatives.append((loan_factor(debt.rate, wealthrate, min(duration, debt.duration)), debt.balance))        
-        c = consumption_factor(theta(risktolerance, discountrate, wealthrate), wealthrate, duration)        
-        consumption = (function(positives) - function(negatives) - terminalwealth) / c
-        if consumption < 0: raise UnstableLifeStyleError(consumption)   
-        else: return int(consumption)    
-
-    def wealthprojection(self, duration, incomeduration, *args, risktolerance, **kwargs):      
-        discountrate, wealthrate, incomerate, valuerate = [kwargs[rate] for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate')]          
-        function = lambda items: np.array([x * y for x, y in items]).sum()
-        positives = [(wealth_factor(wealthrate, duration), self.wealth), (income_factor(incomerate, wealthrate, incomeduration), self.income)]
-        negatives = [(consumption_factor(theta(risktolerance, discountrate, wealthrate), wealthrate, duration), self.consumption)]        
-        if self.mortgage: negatives.append((loan_factor(self.mortgage.rate, wealthrate, min(duration, self.mortgage.duration)), self.mortgage.balance))
-        if self.studentloan: negatives.append((loan_factor(self.studentloan.rate, wealthrate, min(duration, self.studentloan.duration)), self.studentloan.balance)) 
-        if self.debt: negatives.append((loan_factor(self.debt.rate, wealthrate, min(duration, self.debt.duration)), self.debt.balance))
-        return function(positives) - function(negatives)
-    
-    def valueprojection(self, duration, *args, valuerate, **kwargs):
-        a = value_factor(valuerate, duration)
-        return a * self.value 
-
     @property
     def loans(self): return dict(mortgage=self.mortgage, studentloan=self.studentloan, debt=self.debt)
     @property
     def assets(self): return dict(income=self.income, wealth=self.wealth, value=self.value)
-    
+
+    def income_projection(self, horizon, incomehorizon, *args, risktolerance, incomerate, **kwargs): return self.income * pow(1 + incomerate, min(horizon, incomehorizon))
+    def value_projection(self, horizon, *args, risktolerance, valuerate, **kwargs): return self.value * pow(1 + valuerate, horizon)    
+    def consumption_projection(self, horizon, *args, risktolerance, discountrate, wealthrate, **kwargs ): return self.consumption * pow(1 + theta(risktolerance, discountrate, wealthrate), horizon)    
+    def mortgage_projection(self, horizon, *args, **kwargs): return self.mortgage.projection(horizon)
+    def studentloan_projection(self, horizon, *args, **kwargs): return self.studentloan.projection(horizon)
+    def debt_projection(self, horizon, *args, **kwargs): return self.debt.projection(horizon)
+    def wealth_projection(self, horizon, incomehorizon, *args, risktolerance, **kwargs):
+        discountrate, wealthrate, incomerate, valuerate = [kwargs.pop(rate) for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate')]          
+        w = wealth_factor(wealthrate, horizon)
+        i = income_factor(incomerate, wealthrate, min(horizon, incomehorizon))
+        c = consumption_factor(theta(risktolerance, discountrate, wealthrate), wealthrate, horizon)
+        m = loan_factor(wealthrate, min(horizon, self.mortgage.duration)) if self.mortgage else 0
+        s = loan_factor(wealthrate, min(horizon, self.studentloan.duration)) if self.studentloan else 0
+        d = loan_factor(wealthrate, min(horizon, self.debt.duration)) if self.debt else 0     
+        return  w * self.wealth + i * self.income - c * self.consumption - m * self.mortgage.payment - s * self.studentloan.payment - d * self.debt.payment
+
     @property
     def coverage(self): return self.income / (self.mortgage.payment + self.studentloan.payment + self.debt.payment)
     @property
@@ -172,29 +148,106 @@ class Financials(ntuple('Financials', 'income wealth value consumption mortgage 
         if newfinancials.wealth < 0: raise InsufficientFundsError()  
         if not bank.qualify(newfinancials.coverage): raise InsufficientCoverageError()
         return newfinancials
+
+    @classmethod
+    def fromProjection(cls, horizon, incomehorizon, *args, financials, risktolerance, **kwargs):
+        discountrate, wealthrate, incomerate, valuerate = [kwargs.pop(rate) for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate',)]             
+        income = financials.income_projection(horizon, incomehorizon, risktolerance=risktolerance, incomerate=incomerate)
+        wealth = financials.wealth_projection(horizon, incomehorizon, risktolerance=risktolerance, discountrate=discountrate, wealthrate=wealthrate, incomerate=incomerate, valuerate=incomerate)
+        value = financials.value_projection(horizon, risktolerance=risktolerance, valuerate=valuerate)
+        consumption = financials.consumption_projection(horizon, risktolerance=risktolerance, discountrate=discountrate, wealthrate=wealthrate)
+        mortgage = financials.mortgage_projection(horizon) 
+        studentloan = financials.studentloan_projection(horizon)
+        debt = financials.debt_projection(horizon)
+        assets = dict(income=income, wealth=wealth, value=value)
+        loans = dict(mortgage=mortgage, studentloan=studentloan, debt=debt)
+        rates = dict(discountrate=discountrate, wealthrate=wealthrate, incomerate=incomerate, valuerate=valuerate)
+        if wealth < 0: raise UnsolventLifeStypeError(wealth)   
+        if consumption < 0: raise UnstableLifeStyleError(consumption)  
+        else: consumption =  int(consumption)  
+        return cls.fromConsumption(horizon, incomehorizon, consumption=consumption, risktolerance=risktolerance, **rates, **assets, **loans)
+
+    @classmethod 
+    def fromConsumption(cls, horizon, incomehorizon, *args, consumption, risktolerance, **kwargs):
+        discountrate, wealthrate, incomerate, valuerate = [kwargs[rate] for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate',)]              
+        income, wealth, value = [kwargs[asset] for asset in ('income', 'wealth', 'value',)]
+        mortgage, studentloan, debt = [kwargs.get(loan, None) for loan in ('mortgage', 'studentloan', 'debt',)]            
+        w = wealth_factor(wealthrate, horizon)
+        i = income_factor(incomerate, wealthrate, min(horizon, incomehorizon))
+        c = consumption_factor(theta(risktolerance, discountrate, wealthrate), wealthrate, horizon)
+        m, mpayment = (loan_factor(wealthrate, min(horizon, mortgage.duration)), mortgage.payment,) if mortgage else (0, 0,)
+        s, spayment = (loan_factor(wealthrate, min(horizon, studentloan.duration)), studentloan.payment,) if studentloan else (0, 0,)
+        d, dpayment = (loan_factor(wealthrate, min(horizon, debt.duration)), debt.payment,) if debt else (0, 0,)    
+        terminalwealth = w * wealth + i * income - c * consumption - m * mpayment - s * spayment - d * dpayment
+        if terminalwealth < 0: raise UnsolventLifeStypeError(terminalwealth)  
+        assets = dict(income=income, wealth=wealth, value=value)
+        loans = dict(mortgage=mortgage, studentloan=studentloan, debt=debt)
+        return cls(consumption=consumption, **assets, **loans)
+
+    @classmethod
+    def fromTerminalWealth(cls, horizon, incomehorizon, *args, terminalwealth, risktolerance, **kwargs):
+        discountrate, wealthrate, incomerate, valuerate = [kwargs[rate] for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate',)]      
+        income, wealth, value = [kwargs[asset] for asset in ('income', 'wealth', 'value',)]
+        mortgage, studentloan, debt = [kwargs.get(loan, None) for loan in ('mortgage', 'studentloan', 'debt',)]            
+        w = wealth_factor(wealthrate, horizon)
+        i = income_factor(incomerate, wealthrate, min(horizon, incomehorizon))
+        c = consumption_factor(theta(risktolerance, discountrate, wealthrate), wealthrate, horizon)
+        m, mpayment = (loan_factor(wealthrate, min(horizon, mortgage.duration)), mortgage.payment,) if mortgage else (0, 0,)
+        s, spayment = (loan_factor(wealthrate, min(horizon, studentloan.duration)), studentloan.payment,) if studentloan else (0, 0,)
+        d, dpayment = (loan_factor(wealthrate, min(horizon, debt.duration)), debt.payment,) if debt else (0, 0,)     
+        consumption = (w * wealth - terminalwealth + i * income - m * mpayment - s * spayment - d * dpayment) / c
+        if consumption < 0: raise UnstableLifeStyleError(consumption)  
+        else: consumption =  int(consumption)    
+        assets = dict(income=income, wealth=wealth, value=value)
+        loans = dict(mortgage=mortgage, studentloan=studentloan, debt=debt)
+        return cls(consumption=consumption, **assets, **loans)
+
+
+
+
+if __name__ == "__main__":
+    from variables import Geography, Date
+    from realestate.economy import Bank, Education, Broker, Rate
     
-    def projection(self, duration, incomeduration, *args, incomerate, **kwargs):  
-        newwealth = self.wealthprojection(duration, incomeduration, *args, **kwargs)
-        newvalue = self.valueprojection(duration, *args, **kwargs)       
-        newincome = self.income * pow(1 + incomerate, duration)
-        newmortgage = self.mortgage.projection(duration, *args, **kwargs)
-        newstudentloan = self.studentloan.projection(duration, *args, **kwargs)
-        newdebt = self.debt.projection(duration, *args, **kwargs)
-        loans = dict(mortgage=newmortgage, studentloan=newstudentloan, debt=newdebt)
-        assets = dict(income=newincome, wealth=newwealth, value=newvalue)
-        newfinancials = self.__class__(*args, **assets, **loans, **kwargs)  
-        return newfinancials
+    AGES = {'adulthood':15, 'retirement':65, 'death':95} 
+    RISKTOLERANCE = 2
+    HORIZON = 20
+    
+    age = 35 
+    yearoccupied = 2010
+    education = 'Graduate'
+    
+    geography =Geography.fromstr('state=6|county=29|tract=*')
+    date = Date.fromstr('2018')
+    
+    mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
+    studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
+    debt_bank = Bank('debt', rate=0.25, duration=3, basis='year')
+        
+    basic = Education('basic', cost=0, duration=0, basis='year')
+    grade = Education('grade', cost=0, duration=3, basis='year')
+    associates = Education('associates', cost=25000, duration=5, basis='year')
+    bachelors = Education('bachelors', cost=50000, duration=7, basis='year')
+    graduate = Education('gradudate', cost=75000, duration=10, basis='year')
+    
+    broker = Broker(commissions=0.03)
+    educations = {'uneducated':basic, 'gradeschool':grade, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
+    banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
+    
+    assets = dict(income=int(50000/12), 
+                  value=150000)
+    rates = dict(wealth=Rate(date.index, 0.03, basis='year'), 
+                 discount=Rate(date.index, 0.01, basis='year'), 
+                 income=Rate(date.index, 0.035, basis='year'), 
+                 value=Rate(date.index, 0.05, basis='year'))
+
+    x = createFinancials(geography, date, horizon=HORIZON, age=age, yearoccupied=yearoccupied, education=education, risktolerance=RISKTOLERANCE, 
+                         rates=rates, ages=AGES, **assets, educations=educations, banks=banks, broker=broker)
+
+ 
 
 
-from variables import Geography, Date
-RATES = {'wealthrate':0.002, 'discountrate':0.0005, 'incomerate':0.001, 'valuerate':0.01, }
-AGES = {'adulthood':15, 'retirement':65, 'death':95} 
-geography =Geography.fromstr('state=6|county=29|tract=*')
-date = Date.fromstr('2018')
 
-x = createFinancials(geography, date, risktolerance=2, **RATES, ages=AGES)
-print(repr(x))
-print(str(x))
 
 
 

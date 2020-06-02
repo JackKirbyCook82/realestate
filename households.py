@@ -18,10 +18,14 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousehold(geography, date, *args, **kwargs):    
-    rates = {ratekey:kwargs.pop(ratekey)(date.index, units='month') for ratekey in ('discountrate', 'wealthrate', 'valuerate', 'incomerate',)}
-    financials = createFinancials(geography, date, *args, **rates, **kwargs)
-    utility = createUtility(geography, date, *args, **kwargs)
+def createHousehold(geography, date, *args, rates, **kwargs):  
+    financials = createFinancials(geography, date, *args, rates=rates, **kwargs)
+    utility = createUtility(geography, date, *args, **kwargs)   
+    discountrate = rates['discount'](date.index, units='month')
+    wealthrate = rates['wealth'](date.index, units='month')
+    valuerate = rates['value'](date.index, units='month')
+    incomerate = rates['income'](date.index, units='month')    
+    rates = dict(discountrate=discountrate, wealthrate=wealthrate, valuerate=valuerate, incomerate=incomerate)
     return Household(*args, geography=geography, date=date, financials=financials, utility=utility, **rates, **kwargs)    
 
 def createHouseholdKey(*args, age, race, language, education, children, size, **kwargs):

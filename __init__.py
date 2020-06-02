@@ -54,9 +54,9 @@ basic = Education('basic', cost=0, duration=0, basis='year')
 grade = Education('grade', cost=0, duration=3, basis='year')
 associates = Education('associates', cost=25000, duration=5, basis='year')
 bachelors = Education('bachelors', cost=50000, duration=7, basis='year')
-graduate = Education('gradudate', cost=75000, duration=10, basis='year')
+graduate = Education('graduate', cost=75000, duration=10, basis='year')
 
-broker = Broker(commisions=0.03)
+broker = Broker(commissions=0.03)
 educations = {'uneducated':basic, 'gradeschool':grade, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
 banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
 
@@ -65,18 +65,18 @@ def createHousings(environment):
     if environment['structures'] <= 0: print('Empty Geography: {}, {} Structures\n'.format(str(environment.geography), environment['structures']))
     else: 
         housingsampler = MonteCarlo(**environment['housing'].todict())  
-        rates = dict(valuerate=environment['valuerate'], rentrate=environment['rentrate'])
+        rates = dict(value=environment['valuerate'], rent=environment['rentrate'])
         content = dict(crime=environment['crime'], school=environment['school'], proximity=environment['proximity'], community=environment['community'])
         for index, values in housingsampler(environment['structures']):               
-            yield createHousing(environment.geography, environment.date, sqftprice=100, sqftrent=1, sqftcost=0.5, ages=AGES, **rates, **values, **content)        
+            yield createHousing(environment.geography, environment.date, sqftprice=100, sqftrent=1, sqftcost=0.5, ages=AGES, rates=rates, **values, **content)        
 
 def createHouseholds(environment):        
     if environment['households'] <= 0: print('Empty Geography: {}, {} Households\n'.format(str(environment.geography), environment['households']))
     else: 
         householdsampler = MonteCarlo(**environment['household'].todict())
-        rates = dict(wealthrate=environment['wealthrate'], discountrate=environment['discountrate'], incomerate=environment['incomerate'], valuerate=environment['valuerate'])
+        rates = dict(wealth=environment['wealthrate'], discount=environment['discountrate'], income=environment['incomerate'], value=environment['valuerate'])
         for index, values in householdsampler(environment['households']): 
-            yield createHousehold(environment.geography, environment.date, horizon=5, risktolerance=RISKTOLERANCE, ages=AGES, **rates, **values)
+            yield createHousehold(environment.geography, environment.date, horizon=5, risktolerance=RISKTOLERANCE, ages=AGES, rates=rates, **values)
         
 
 def main(*inputArgs, date, **inputParms):

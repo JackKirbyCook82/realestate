@@ -123,10 +123,8 @@ class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
     def loan(self, amount): return Loan(self.type, balance=amount, rate=self.rate, duration=self.duration, basis='month')
     def downpayment(self, value): return downpayment(value, self.loantovalue)
     def cost(self, amount): return financingcost(amount, self.financing)
-    
 
-    
-    
+
     
     
     

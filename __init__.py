@@ -46,9 +46,10 @@ concepts = {
     'proximity': concept('proximity', ['commute']),
     'community': concept('community',['race', 'language', 'children', 'age', 'education'])}
 
-mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=0.03, loantovalue=0.8, basis='year')
+mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=1.2, loantovalue=0.8, basis='year')
 studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
-debt_bank = Bank('debt', rate=0.25, duration=3, basis='year')
+debt_bank = Bank('debt', rate=0.10, duration=10, basis='year')
+credit_bank = Bank('credit', rate=0.25, duration=5, basis='year')
     
 basic = Education('basic', cost=0, duration=0, basis='year')
 grade = Education('grade', cost=0, duration=3, basis='year')

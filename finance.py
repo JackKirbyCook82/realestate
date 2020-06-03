@@ -58,25 +58,29 @@ def createFinancials(geography, date, *args, horizon, age, yearoccupied, educati
     incomehorizon = int((ages['retirement'] - start_age) * 12)
     assets = dict(income=start_income, wealth=0, value=0)
     loans = dict(studentloan=start_studentloan)
-    start_financials = Financials.fromTerminalWealth(horizon, incomehorizon, *args, terminalwealth=purchase_cash, **assets, **loans, **rates, **kwargs)
-    prepurchase_financials = Financials.fromProjection(horizon, incomehorizon, *args, financials=start_financials, **rates, **kwargs)
+    financials = Financials.fromTerminalWealth(horizon, incomehorizon, *args, terminalwealth=purchase_cash, **assets, **loans, **rates, **kwargs)
+    print(repr(financials), '\n')    
+    financials = financials.projection(horizon, incomehorizon, *args, **rates, **kwargs)
+    print(repr(financials), '\n')
     raise Exception()
-    purchase_financials = prepurchase_financials.buy(purchase_value, *args, bank=banks['mortgage'], **rates, **kwargs)
-    
+    financials = financials.purchase(purchase_value, *args, bank=banks['mortgage'], **kwargs)
+    print(repr(financials), '\n')
+
     horizon = int((int(age) - purchase_age) * 12)
-    incomehorizon = int((ages['retirement'] - start_age) * 12)
-    current_financials = Financials.fromProjection(horizon, incomehorizon, *args, financials=purchase_financials, **kwargs)
-    return current_financials
+    incomehorizon = int((ages['retirement'] - start_age) * 12)    
+    financials = financials.projection(horizon, incomehorizon, *args, **rates, **kwargs)
+    print(repr(financials), '\n')
+    return financials
 
 
-class InsufficientFundsError(Exception): pass
-class InsufficientCoverageError(Exception): pass
+class InsufficientFundsError(Exception): 
+    def __init__(self, wealth): super().__init__('${} Deficit'.format(int(abs(wealth))))   
 
 class UnstableLifeStyleError(Exception): 
-    def __init__(self, consumption): super().__init__('${}/MO'.format(int(abs(consumption))))
+    def __init__(self, consumption): super().__init__('${}/MO Deficit'.format(int(abs(consumption))))
     
-class UnsolventLifeStypeError(Exception):
-    def __init__(self, terminalwealth): super().__init__('${}'.format(int(abs(terminalwealth))))   
+class UnsolventLifeStyleError(Exception):
+    def __init__(self, wealth): super().__init__('${} Deficit'.format(int(abs(wealth))))   
 
 
 class Financials(ntuple('Financials', 'income wealth value consumption mortgage studentloan debt')):
@@ -90,13 +94,13 @@ class Financials(ntuple('Financials', 'income wealth value consumption mortgage 
         content.update({key:str(value) for key, value in self.todict().items() if key not in content.keys()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()])) 
 
-    def __new__(cls, *args, consumption, **kwargs):            
+    def __new__(cls, *args, income, wealth, value, consumption, mortgage=None, studentloan=None, debt=None, **kwargs):            
         if consumption < 0: raise UnstableLifeStyleError(consumption)  
         else: consumption = int(consumption)  
-        assets = {assetkey:int(kwargs.pop(assetkey)) for assetkey in ('income', 'wealth', 'value',)}
-        loans = {loankey:kwargs.pop(loankey, None) for loankey in ('mortgage', 'studentloan', 'debt',)}
-        loans = {loankey:(loan if loan is not None else Loan(loankey, balance=0, rate=0, duration=0, basis='month')) for loankey, loan in loans.items()}
-        return super().__new__(cls, **assets, consumption=consumption, **loans)   
+        if mortgage is None: mortgage = Loan('mortgage', balance=0, rate=0, duration=0, basis='month')
+        if studentloan is None: studentloan = Loan('studentloan', balance=0, rate=0, duration=0, basis='month')
+        if debt is None: debt = Loan('debt', balance=0, rate=0, duration=0, basis='month')
+        return super().__new__(cls, int(income), int(wealth), int(value), consumption=consumption, mortgage=mortgage, studentloan=studentloan, debt=debt)   
 
     def todict(self): return self._asdict()
     def __getitem__(self, item): 
@@ -115,8 +119,7 @@ class Financials(ntuple('Financials', 'income wealth value consumption mortgage 
     def mortgage_projection(self, horizon, *args, **kwargs): return self.mortgage.projection(horizon)
     def studentloan_projection(self, horizon, *args, **kwargs): return self.studentloan.projection(horizon)
     def debt_projection(self, horizon, *args, **kwargs): return self.debt.projection(horizon)
-    def wealth_projection(self, horizon, incomehorizon, *args, risktolerance, **kwargs):
-        discountrate, wealthrate, incomerate, valuerate = [kwargs.pop(rate) for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate')]          
+    def wealth_projection(self, horizon, incomehorizon, *args, risktolerance, discountrate, wealthrate, incomerate, valuerate, **kwargs):     
         w = wealth_factor(wealthrate, horizon)
         i = income_factor(incomerate, wealthrate, min(horizon, incomehorizon))
         c = consumption_factor(theta(risktolerance, discountrate, wealthrate), wealthrate, horizon)
@@ -125,52 +128,50 @@ class Financials(ntuple('Financials', 'income wealth value consumption mortgage 
         d = loan_factor(wealthrate, min(horizon, self.debt.duration)) if self.debt else 0     
         return  w * self.wealth + i * self.income - c * self.consumption - m * self.mortgage.payment - s * self.studentloan.payment - d * self.debt.payment
 
-    @property
-    def coverage(self): return self.income / (self.mortgage.payment + self.studentloan.payment + self.debt.payment)
-    @property
-    def loantovalue(self): return self.mortgage.balance / self.value
-
-    def sale(self, *args, broker, **kwargs): 
-        proceeds = self.value - broker.cost(self.value) - self.mortgage.balance 
-        loans = dict(mortgage=self.mortgage.payoff(), studentloan=self.studentloan, debt=self.debt)
-        assets = dict(income=self.income, wealth=self.wealth + proceeds, value=0)
-        newfinancials = self.__class__(*args, **assets, **loans, **kwargs)  
-        return newfinancials
-    
-    def buy(self, value, *args, bank, **kwargs): 
-        assert value > 0 and self.value == 0 and self.mortgage is None
-        downpayment = bank.downpayment(value)
-        closingcost = bank.cost(value - downpayment)
-        mortgage = bank.loan(value - downpayment)
-        loans = dict(mortgage=mortgage, studentloan=self.studentloan, debt=self.debt)
-        assets = dict(income=self.income, wealth=self.wealth - downpayment - closingcost, value=value)
-        newfinancials = self.__class__(*args, **assets, **loans, **kwargs) 
-        if newfinancials.wealth < 0: raise InsufficientFundsError()  
-        if not bank.qualify(newfinancials.coverage): raise InsufficientCoverageError()
-        return newfinancials
-
-    @classmethod
-    def fromProjection(cls, horizon, incomehorizon, *args, financials, risktolerance, **kwargs):
-        discountrate, wealthrate, incomerate, valuerate = [kwargs.pop(rate) for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate',)]             
-        income = financials.income_projection(horizon, incomehorizon, risktolerance=risktolerance, incomerate=incomerate)
-        wealth = financials.wealth_projection(horizon, incomehorizon, risktolerance=risktolerance, discountrate=discountrate, wealthrate=wealthrate, incomerate=incomerate, valuerate=incomerate)
-        value = financials.value_projection(horizon, risktolerance=risktolerance, valuerate=valuerate)
-        consumption = financials.consumption_projection(horizon, risktolerance=risktolerance, discountrate=discountrate, wealthrate=wealthrate)
-        mortgage = financials.mortgage_projection(horizon) 
-        studentloan = financials.studentloan_projection(horizon)
-        debt = financials.debt_projection(horizon)
+    def projection(self, horizon, incomehorizon, *args, risktolerance, discountrate, wealthrate, incomerate, valuerate, **kwargs):     
+        income = self.income_projection(horizon, incomehorizon, risktolerance=risktolerance, incomerate=incomerate)
+        wealth = self.wealth_projection(horizon, incomehorizon, risktolerance=risktolerance, discountrate=discountrate, wealthrate=wealthrate, incomerate=incomerate, valuerate=incomerate)
+        if wealth < 0: raise UnsolventLifeStyleError(wealth)   
+        value = self.value_projection(horizon, risktolerance=risktolerance, valuerate=valuerate)
+        consumption = self.consumption_projection(horizon, risktolerance=risktolerance, discountrate=discountrate, wealthrate=wealthrate)
+        mortgage = self.mortgage_projection(horizon) 
+        studentloan = self.studentloan_projection(horizon)
+        debt = self.debt_projection(horizon)
         assets = dict(income=income, wealth=wealth, value=value)
         loans = dict(mortgage=mortgage, studentloan=studentloan, debt=debt)
-        rates = dict(discountrate=discountrate, wealthrate=wealthrate, incomerate=incomerate, valuerate=valuerate)
-        if wealth < 0: raise UnsolventLifeStypeError(wealth)   
-        if consumption < 0: raise UnstableLifeStyleError(consumption)  
-        else: consumption =  int(consumption)  
-        return cls.fromConsumption(horizon, incomehorizon, consumption=consumption, risktolerance=risktolerance, **rates, **assets, **loans)
-
+        return self.__class__(**assets, consumption=consumption, **loans)
+ 
+    def purchase(self, value, *args, bank, **kwargs):
+        pass
+    
+#    def buy(self, value, *args, bank, **kwargs): 
+#        assert value > 0 and self.value == 0 and not self.mortgage
+#        wealth, mortgage = bank(value, self)
+#        if wealth < 0: raise InsufficientFundsError(wealth)  
+#        loans = dict(mortgage=mortgage, studentloan=self.studentloan, debt=self.debt)
+#        assets = dict(income=self.income, wealth=wealth, value=value)
+#        downpayment = bank.downpayment(value)
+#        closingcost = bank.cost(value - downpayment)
+#        mortgage = bank.loan(value - downpayment)
+#        wealth = self.wealth - downpayment - closingcost 
+#        coverage = lambda income, payments: income / payments
+#        loantovalue = lambda balance, value: balance / value       
+#        if not bank.qualify(mortgage.balance, mortgage.payment + self.studentloan.payment + self.debt.payment): 
+#            raise InsufficientCoverageError(mortgage.balance, mortgage.payment + self.studentloan.payment + self.debt.payment)                
+    
+    def sale(self, *args, broker, **kwargs):
+        pass
+    
+#    def sale(self, *args, broker, **kwargs): 
+#        proceeds = self.value - broker.cost(self.value) - self.mortgage.balance 
+#        loans = dict(mortgage=self.mortgage.payoff(), studentloan=self.studentloan, debt=self.debt)
+#        assets = dict(income=self.income, wealth=self.wealth + proceeds, value=0)
+#        newfinancials = self.__class__(*args, **assets, **loans, **kwargs)  
+#        return newfinancials
+    
     @classmethod 
-    def fromConsumption(cls, horizon, incomehorizon, *args, consumption, risktolerance, **kwargs):
-        discountrate, wealthrate, incomerate, valuerate = [kwargs[rate] for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate',)]              
-        income, wealth, value = [kwargs[asset] for asset in ('income', 'wealth', 'value',)]
+    def fromConsumption(cls, horizon, incomehorizon, *args, consumption, risktolerance, discountrate, wealthrate, incomerate, valuerate, **kwargs):            
+        income, wealth, value = [int(kwargs[asset]) for asset in ('income', 'wealth', 'value',)]
         mortgage, studentloan, debt = [kwargs.get(loan, None) for loan in ('mortgage', 'studentloan', 'debt',)]            
         w = wealth_factor(wealthrate, horizon)
         i = income_factor(incomerate, wealthrate, min(horizon, incomehorizon))
@@ -179,15 +180,14 @@ class Financials(ntuple('Financials', 'income wealth value consumption mortgage 
         s, spayment = (loan_factor(wealthrate, min(horizon, studentloan.duration)), studentloan.payment,) if studentloan else (0, 0,)
         d, dpayment = (loan_factor(wealthrate, min(horizon, debt.duration)), debt.payment,) if debt else (0, 0,)    
         terminalwealth = w * wealth + i * income - c * consumption - m * mpayment - s * spayment - d * dpayment
-        if terminalwealth < 0: raise UnsolventLifeStypeError(terminalwealth)  
+        if terminalwealth < 0: raise UnsolventLifeStyleError(terminalwealth)  
         assets = dict(income=income, wealth=wealth, value=value)
         loans = dict(mortgage=mortgage, studentloan=studentloan, debt=debt)
         return cls(consumption=consumption, **assets, **loans)
 
     @classmethod
-    def fromTerminalWealth(cls, horizon, incomehorizon, *args, terminalwealth, risktolerance, **kwargs):
-        discountrate, wealthrate, incomerate, valuerate = [kwargs[rate] for rate in ('discountrate', 'wealthrate', 'incomerate', 'valuerate',)]      
-        income, wealth, value = [kwargs[asset] for asset in ('income', 'wealth', 'value',)]
+    def fromTerminalWealth(cls, horizon, incomehorizon, *args, terminalwealth, risktolerance, discountrate, wealthrate, incomerate, valuerate, **kwargs):   
+        income, wealth, value = [int(kwargs[asset]) for asset in ('income', 'wealth', 'value',)]
         mortgage, studentloan, debt = [kwargs.get(loan, None) for loan in ('mortgage', 'studentloan', 'debt',)]            
         w = wealth_factor(wealthrate, horizon)
         i = income_factor(incomerate, wealthrate, min(horizon, incomehorizon))

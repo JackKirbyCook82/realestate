@@ -36,6 +36,8 @@ payment = lambda x, r, n: x * (r * pow(1 + r, n)) / (pow(1 + r, n) - 1) if x els
 balance = lambda x, r, n: x * (pow(1 + r, n) - pow(1 + r, n)) / (pow(1 + r, n) - 1) if x else 0  
 downpayment = lambda x, ltv: x * (1 - ltv)
 financingcost = lambda x, r: x * r
+loantovalue = lambda x, v: x / v   
+coverage = lambda i, *p: i / sum(p)
 
 
 @keydispatcher
@@ -119,10 +121,17 @@ class Bank(ntuple('Bank', 'type rate duration financing coverage loantovalue')):
         return super().__new__(cls, *args, rate=rate, duration=duration, financing=financing, coverage=coverage, loantovalue=loantovalue, **kwargs)  
 
     def loan(self, amount): return Loan(self.type, balance=amount, rate=self.rate, duration=self.duration, basis='month')
-    def qualify(self, coverage): return coverage >= self.coverage
     def downpayment(self, value): return downpayment(value, self.loantovalue)
     def cost(self, amount): return financingcost(amount, self.financing)
     
 
+    
+    
+    
+    
+    
+    
+    
+    
     
     

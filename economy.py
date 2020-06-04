@@ -77,7 +77,7 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         rate = _convertrate(basis, 'month', rate)
         duration = max(int(_convertduration(basis, 'month', duration)), 0)
         return super().__new__(cls, loantype, balance, rate, duration)    
-    
+
     @property
     def payment(self): return payment(self.balance, self.rate, self.duration)
     @property
@@ -86,7 +86,7 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     def principal(self): return self.payment - self.interest
     
     def payoff(self): return self.projection(self.duration)
-    def projection(self, duration): return self.__class__(self.type, balance=balance(self.balance, self.rate, self.duration), rate=self.rate, duration=max(self.duration - duration, 0), basis='month')
+    def projection(self, duration): return self.__class__(self.type, balance=balance(self.balance, self.rate, self.duration), rate=self.rate, duration=max(self.duration - duration, 0), basis='month')    
     
       
 class Broker(ntuple('Broker', 'commissions')): 

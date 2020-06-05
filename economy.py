@@ -84,10 +84,8 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     def interest(self): return self.balance * self.rate
     @property
     def principal(self): return self.payment - self.interest
-    
-    def payoff(self): return self.projection(self.duration)
-    def projection(self, duration): return self.__class__(self.type, balance=balance(self.balance, self.rate, self.duration), rate=self.rate, duration=max(self.duration - duration, 0), basis='month')    
-    
+    def projection(self, duration): return np.vectorize(lambda x: balance(self.balance, self.rate, x))(np.arange(0, duration))[::-1]
+
       
 class Broker(ntuple('Broker', 'commissions')): 
     stringformat = 'Broker|{commissions:.3f}%' 

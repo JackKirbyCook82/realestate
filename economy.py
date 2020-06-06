@@ -38,6 +38,9 @@ downpayment = lambda x, ltv: x * (1 - ltv)
 financingcost = lambda x, r: x * r
 loantovalue = lambda x, v: x / v   
 coverage = lambda i, *p: i / sum(p)
+imatrix = lambda n: np.triu(-np.subtract(*np.mgrid[0:n, 0:n]))
+rmatrix = lambda r, n: np.ones((n,n)) * r
+fmatrix = lambda r, n: np.triu(rmatrix(r, n) ** imatrix(n))
 
 
 @keydispatcher
@@ -84,9 +87,13 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     def interest(self): return self.balance * self.rate
     @property
     def principal(self): return self.payment - self.interest
-    def projection(self, duration): return np.vectorize(lambda x: balance(self.balance, self.rate, x))(np.arange(0, duration))[::-1]
+    def projection(self, horizon): 
+        cashflow = np.concatenate([np.array([self.balance]), -np.ones(self.duration-1) * self.payment])    
+        x = np.cumsum(np.sum(np.multiply(fmatrix(self.rate, self.duration), cashflow), axis=0))
+        pad = max(horizon, self.duration) - self.duration
+        return np.pad(x, (0, pad), 'constant')
 
-      
+
 class Broker(ntuple('Broker', 'commissions')): 
     stringformat = 'Broker|{commissions:.3f}%' 
     def __str__(self): return self.stringformat.format(commissions=self.commissions)          

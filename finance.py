@@ -7,7 +7,11 @@ Created on Sun Feb 23 2020
 """
 
 import numpy as np
+import pandas as pd
 from collections import namedtuple as ntuple
+
+from utilities.dispatchers import clskey_singledispatcher as keydispatcher
+from utilities.strings import uppercase
 
 from realestate.economy import Loan
 
@@ -180,32 +184,54 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         consumption = (w * wealth - terminalwealth + i * income - x * studentloan.payment) / c      
         return Financials(income=income, wealth=wealth, value=0, consumption=consumption, studentloan=studentloan)    
  
+    @keydispatcher
+    def get_projection(self, key, horizon, *args, **kwargs): raise KeyError(key)
+    def projection(self, horizon, *args, **kwargs):
+        data = {key:function(self, horizon, *args, **kwargs) for key, function in self.get_projection.registry().items()}
+        dataframe= pd.DataFrame(data)
+        dataframe.columns = [uppercase(column) for column in dataframe.columns]
+        dataframe.index.name = 'Horizon'
+        dataframe.name = 'Financials'
+        return dataframe
+  
+    def saving_projection(self, horizon, *args, **kwargs):
+        incomes = self.income_projection(horizon, *args, **kwargs)
+        consumptions = self.consumption_projection(horizon, *args, **kwargs)
+        return incomes - consumptions    
+
+    def cashflow_projection(self, horizon, *args, **kwargs):
+        cashflow = self.saving_projection(horizon, *args, **kwargs)[:-1]
+        return np.concatenate([np.array([self.wealth]), cashflow])    
+    
+    @get_projection.register('income')
     def income_projection(self, horizon, *args, incomerate, **kwargs):
         x = farray(1 + incomerate, min(horizon, self.incomehorizon, self.consumptionhorizon)+1)
         pad = min(horizon, self.consumptionhorizon) - self.incomehorizon
         return  np.pad(x, (0, pad), 'constant') * self.income
-        
+    
+    @get_projection.register('consumption')       
     def consumption_projection(self, horizon, *args, risktolerance, discountrate, wealthrate, **kwargs):
         consumptionrate = theta(discountrate, wealthrate, risktolerance)
         return farray(1 + consumptionrate, min(horizon, self.consumptionhorizon)+1) * self.consumption
+    
+    @get_projection.register('value')
+    def value_projection(self, horizon, *args, valuerate, **kwargs):
+        return farray(1 + valuerate, min(horizon, self.consumptionhorizon)+1) * self.value
+    
+    @get_projection.register('mortgage')
+    def mortgage_projection(self, horizon, *args, **kwargs): 
+        return self.mortgage.projection(min(horizon, self.consumptionhorizon)+1)
 
-    def saving_projection(self, horizon, *args, **kwargs):
-        incomes = self.income_projection(horizon, *args, **kwargs)
-        consumptions = self.consumption_projection(horizon, *args, **kwargs)
-        return incomes - consumptions
-
-    def cashflow_projection(self, horizon, *args, **kwargs):
-        cashflow = self.saving_projection(horizon, *args, **kwargs)[:-1]
-        return np.concatenate([np.array([self.wealth]), cashflow])
-            
+    @get_projection.register('studentloan')
+    def studentloan_projection(self, horizon, *args, **kwargs): 
+        return  self.studentloan.projection(min(horizon, self.consumptionhorizon)+1)
+      
+    @get_projection.register('wealth')       
     def wealth_projection(self, horizon, *args, wealthrate, **kwargs):        
         cashflow = self.cashflow_projection(horizon, *args, wealthrate=wealthrate, **kwargs)
         return np.cumsum(np.sum(np.multiply(fmatrix(wealthrate, min(horizon, self.consumptionhorizon)+1), cashflow), axis=0))
 
-    def value_projection(self, horizon, *args, valuerate, **kwargs): return farray(1 + valuerate, min(horizon, self.consumptionhorizon)+1) * self.value
-    def mortgage_projection(self, horizon, *args, **kwargs): return self.mortgage.projection(min(horizon, self.consumptionhorizon))
-    def studentloan_projection(self, horizon, *args, **kwargs): return self.studentloan.projection(min(horizon, self.consumptionhorizon))       
-    
+
 #    def income_projection(self, horizon, incomerate): 
 #        if horizon > self.incomehorizon: return 0
 #        else: return self.income * projection_factor(incomerate, horizon)

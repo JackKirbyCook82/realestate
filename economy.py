@@ -32,19 +32,10 @@ _aslist = lambda items: [items] if isinstance(items, Number) else items
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 _curve = lambda x, y, fill: interp1d(x, y, kind='linear', bounds_error=False, fill_value=fill) 
 
-payment = lambda x, r, n: x * (r * pow(1 + r, n)) / (pow(1 + r, n) - 1)
 downpayment = lambda x, ltv: x * (1 - ltv)
 financingcost = lambda x, r: x * r
 loantovalue = lambda x, v: x / v   
-coverage = lambda i, *p: i / sum(p)
-iarray = lambda n: np.arange(n)
-rarray = lambda r, n: np.ones(n) * r
-farray = lambda r, n: rarray(r, n) ** iarray(n)
-imatrix = lambda n: np.triu(-np.subtract(*np.mgrid[0:n, 0:n]))
-rmatrix = lambda r, n: np.ones((n,n)) * r
-fmatrix = lambda r, n: np.triu(rmatrix(r, n) ** imatrix(n))
-balance_factor = lambda r, n: pow(1 + r, n-1)
-payment_factor = lambda r, n: farray(1 + r, n-1).sum()[()]
+loanvalue = lambda x, r, n, i: np.fv(r, i, -np.pmt(r, n, x), -x)
 
 
 @keydispatcher
@@ -88,12 +79,10 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         duration = max(int(_convertduration(basis, 'month', duration)), 0)
         return super().__new__(cls, loantype, balance, rate, duration)    
 
-    @property
-    def payment(self): return payment(self.balance, self.rate, self.duration)
-    @property
-    def interest(self): return self.balance * self.rate
-    @property
-    def principal(self): return self.payment - self.interest   
+    def __call__(self, horizon):
+        balance = loanvalue(self.balance, self.rate, self.duration, min(horizon, self.duration)) 
+        duration = max(self.duration - horizon, 0)
+        return self.__class__(self.type, balance=balance, duration=duration, rate=self.rate, basis='month')
 
 
 class Broker(ntuple('Broker', 'commissions')): 

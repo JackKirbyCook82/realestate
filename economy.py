@@ -32,15 +32,19 @@ _aslist = lambda items: [items] if isinstance(items, Number) else items
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 _curve = lambda x, y, fill: interp1d(x, y, kind='linear', bounds_error=False, fill_value=fill) 
 
-payment = lambda x, r, n: x * (r * pow(1 + r, n)) / (pow(1 + r, n) - 1) if x else 0
-balance = lambda x, r, n: x * (pow(1 + r, n) - pow(1 + r, n)) / (pow(1 + r, n) - 1) if x else 0  
+payment = lambda x, r, n: x * (r * pow(1 + r, n)) / (pow(1 + r, n) - 1)
 downpayment = lambda x, ltv: x * (1 - ltv)
 financingcost = lambda x, r: x * r
 loantovalue = lambda x, v: x / v   
 coverage = lambda i, *p: i / sum(p)
+iarray = lambda n: np.arange(n)
+rarray = lambda r, n: np.ones(n) * r
+farray = lambda r, n: rarray(r, n) ** iarray(n)
 imatrix = lambda n: np.triu(-np.subtract(*np.mgrid[0:n, 0:n]))
 rmatrix = lambda r, n: np.ones((n,n)) * r
 fmatrix = lambda r, n: np.triu(rmatrix(r, n) ** imatrix(n))
+balance_factor = lambda r, n: pow(1 + r, n-1)
+payment_factor = lambda r, n: farray(1 + r, n-1).sum()[()]
 
 
 @keydispatcher
@@ -74,8 +78,11 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         content = {'type':uppercase(self.type), 'balance':self.balance, 'rate':_convertrate('month', 'year', self.rate), 'duration':self.duration}
         return self.stringformat.format(**content) if self else self.emptystringformat.format(**content)
     
-    def __repr__(self): return '{}({})'.format(self.__class__.__name__, dictstring(self._asdict()))    
-    def __bool__(self): return int(self.balance) > 0
+    def __repr__(self):
+        content = {'type':self.type, 'balance':round(self.balance, ndigits=1), 'rate':round(self.rate, ndigits=4), 'duration':self.duration}
+        return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, str(value)]) for key, value in content.items()])) 
+   
+    def __bool__(self): return int(self.balance) > 0    
     def __new__(cls, loantype, *args, balance, rate, duration, basis, **kwargs): 
         rate = _convertrate(basis, 'month', rate)
         duration = max(int(_convertduration(basis, 'month', duration)), 0)
@@ -86,12 +93,7 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     @property
     def interest(self): return self.balance * self.rate
     @property
-    def principal(self): return self.payment - self.interest
-    def projection(self, horizon): 
-        cashflow = np.concatenate([np.array([self.balance]), -np.ones(self.duration-1) * self.payment])    
-        x = np.cumsum(np.sum(np.multiply(fmatrix(self.rate, self.duration), cashflow), axis=0))
-        pad = max(horizon, self.duration) - self.duration
-        return np.pad(x, (0, pad), 'constant')
+    def principal(self): return self.payment - self.interest   
 
 
 class Broker(ntuple('Broker', 'commissions')): 

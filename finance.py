@@ -32,7 +32,7 @@ rmatrix = lambda r, n: np.ones((n,n)) * r
 fmatrix = lambda r, n: np.triu(rmatrix(r, n) ** imatrix(n))
 
 theta = lambda dr, wr, risk: (wr - dr) / risk
-wealth_factor = lambda wr, n: farray(1 + wr, n).sum()[()]
+wealth_factor = lambda wr, n: pow(1 + wr, n)
 income_factor = lambda ir, wr, n: dotarray(farray(1 + ir, n-1), farray(1 + wr, n-1)[::-1])[()]
 consumption_factor = lambda cr, wr, n: dotarray(farray(1 + cr, n-1), farray(1 + wr, n-1)[::-1])[()]
 loan_factor = lambda wr, n: farray(1 + wr, n-1).sum()[()]
@@ -81,6 +81,8 @@ def createFinancials(geography, date, *args, age, education, yearoccupied, incom
     yield financials
   
 
+class ExceededHorizonError(Exception): pass
+
 class UnsolventLifeStyleError(Exception): 
     @property
     def wealth(self): return self.__wealth
@@ -128,9 +130,9 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         return self.__stringformat.format(**content)     
     
     def __repr__(self): 
-        content = {'incomehorizon':self.incomehorizon, 'consumptionhorizon':self.consumptionhorizon}
-        content.update({key:str(int(value)) for key, value in self.assets.items()})
-        content.update({key:str(int(value)) for key, value in self.flows.items()})
+        content = {'incomehorizon':str(self.incomehorizon), 'consumptionhorizon':str(self.consumptionhorizon)}
+        content.update({key:str(round(value, ndigits=1)) for key, value in self.assets.items()})
+        content.update({key:str(round(value, ndigits=1)) for key, value in self.flows.items()})
         content.update({key:repr(value) for key, value in self.loans.items()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()])) 
     
@@ -140,11 +142,29 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         studentloan = studentloan if studentloan is not None else Loan('studentloan', balance=0, rate=0, duration=0, basis='month')
         return super().__new__(cls, int(income_horizon), int(consumption_horizon), income, wealth, value, consumption, mortgage, studentloan)   
 
-    def todict(self): return self._asdict()
-    def __getitem__(self, item): 
-        if isinstance(item, (int, slice)): return super().__getitem__(item)
-        elif isinstance(item, str): return getattr(self, item)
-        else: raise TypeError(type(item))
+#    def __call__(self, horizon, *args, risktolerance, incomerate, valuerate, wealthrate, discountrate, **kwargs):
+#        if horizon >= self.consumptionhorizon: raise ExceededHorizonError(horizon - self.consumptionhorizon)
+#        assert isinstance(horizon, int) and horizon > 0
+#        consumptionhorizon = self.consumptionhorizon - horizon
+#        incomehorizon =  max(self.incomehorizon - horizon, 0)
+#
+#        income = self.income * pow(1 + incomerate, min(self.incomehorizon, horizon))
+#        consumption = self.consumption * pow(1 + theta(discountrate, wealthrate, risktolerance), min(self.consumptionhorizon, horizon))
+#        value = self.value * pow(1 + valuerate, min(self.consumptionhorizon, horizon))        
+#        mortgage = self.mortgage(horizon)
+#        studentloan = self.studentloan(horizon)        
+#        wealth = self.wealth_projection(horizon, *args, risktolerance=risktolerance, incomerate=incomerate, wealthrate=wealthrate, discountrate=discountrate, **kwargs)[horizon]
+#        
+#        assets = dict(wealth=wealth, value=value)
+#        flows = dict(income=income, consumption=consumption)
+#        loans = dict(mortgage=mortgage, studentloan=studentloan)        
+#        return self.__class__(incomehorizon, consumptionhorizon, **assets, **flows, **loans)
+#
+#    def todict(self): return self._asdict()
+#    def __getitem__(self, item): 
+#        if isinstance(item, (int, slice)): return super().__getitem__(item)
+#        elif isinstance(item, str): return getattr(self, item)
+#        else: raise TypeError(type(item))
 
     @property
     def assets(self): return dict(wealth=self.wealth, value=self.value)
@@ -170,7 +190,7 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         coverage = self.income / (self.studentloan.payment + mortgage.payment)        
         if wealth < 0: raise InsufficientFundsError(wealth)       
         if coverage < bank.coverage: raise InsufficientCoverageError(coverage, bank.coverage)
-        assets = dict(income=self.income, wealth=wealth, value=self.value)
+        assets = dict(wealth=wealth, value=self.value)
         flows = dict(income=self.income, consumption=self.consumption)
         loans = dict(mortgage=mortgage, studentloan=self.studentloan)
         return self.__class__(**assets, **flows, **loans)
@@ -187,91 +207,52 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     @keydispatcher
     def get_projection(self, key, horizon, *args, **kwargs): raise KeyError(key)
     def projection(self, horizon, *args, **kwargs):
+        assert isinstance(horizon, int) and horizon >= 0
         data = {key:function(self, horizon, *args, **kwargs) for key, function in self.get_projection.registry().items()}
-        dataframe= pd.DataFrame(data)
+        dataframe = pd.DataFrame(data)
         dataframe.columns = [uppercase(column) for column in dataframe.columns]
         dataframe.index.name = 'Horizon'
         dataframe.name = 'Financials'
         return dataframe
   
-    def saving_projection(self, horizon, *args, **kwargs):
-        incomes = self.income_projection(horizon, *args, **kwargs)
-        consumptions = self.consumption_projection(horizon, *args, **kwargs)
-        return incomes - consumptions    
-
-    def cashflow_projection(self, horizon, *args, **kwargs):
-        cashflow = self.saving_projection(horizon, *args, **kwargs)[:-1]
-        return np.concatenate([np.array([self.wealth]), cashflow])    
-    
     @get_projection.register('income')
     def income_projection(self, horizon, *args, incomerate, **kwargs):
-        x = farray(1 + incomerate, min(horizon, self.incomehorizon, self.consumptionhorizon)+1)
-        pad = min(horizon, self.consumptionhorizon) - self.incomehorizon
-        return  np.pad(x, (0, pad), 'constant') * self.income
+        assert isinstance(horizon, int) and horizon >= 0
+        x = farray(1 + incomerate, min(horizon+1, self.incomehorizon+1, self.consumptionhorizon+1))
+        pad = self.incomehorizon+1 - min(horizon+1, self.consumptionhorizon+1)
+        if pad < 0: x = np.pad(x, (0, -pad), 'constant')
+        return x * self.income
     
     @get_projection.register('consumption')       
     def consumption_projection(self, horizon, *args, risktolerance, discountrate, wealthrate, **kwargs):
+        assert isinstance(horizon, int) and horizon >= 0
         consumptionrate = theta(discountrate, wealthrate, risktolerance)
-        return farray(1 + consumptionrate, min(horizon, self.consumptionhorizon)+1) * self.consumption
+        return farray(1 + consumptionrate, min(horizon+1, self.consumptionhorizon+1)) * self.consumption
     
     @get_projection.register('value')
     def value_projection(self, horizon, *args, valuerate, **kwargs):
-        return farray(1 + valuerate, min(horizon, self.consumptionhorizon)+1) * self.value
+        assert isinstance(horizon, int) and horizon >= 0
+        return farray(1 + valuerate, min(horizon+1, self.consumptionhorizon+1)) * self.value    
     
-    @get_projection.register('mortgage')
-    def mortgage_projection(self, horizon, *args, **kwargs): 
-        return self.mortgage.projection(min(horizon, self.consumptionhorizon)+1)
+    @get_projection.register('savings')
+    def saving_projection(self, horizon, *args, **kwargs):
+        assert isinstance(horizon, int) and horizon >= 0
+        incomes = self.income_projection(horizon, *args, **kwargs)
+        consumptions = self.consumption_projection(horizon, *args, **kwargs)
+#        mortgagepayments  = np.concatenate([np.array([0]), np.ones(min(horizon, self.mortgage.duration)) * self.mortgage.payment])
+#        mortgagepad = self.mortgage.duration - min(horizon, self.consumptionhorizon)
+#        if mortgagepad < 0: mortgagepayments = np.pad(mortgagepayments, (0, -mortgagepad), 'constant')
+#        studentloanpayments = np.concatenate([np.array([0]), np.ones(min(horizon, self.studentloan.duration)) * self.studentloan.payment])
+#        studentloanpad = self.studentloan.duration - min(horizon, self.consumptionhorizon)
+#        if studentloanpad < 0: studentloanpayments = np.pad(studentloanpayments, (0, -studentloanpad), 'constant')
+        return incomes - consumptions
 
-    @get_projection.register('studentloan')
-    def studentloan_projection(self, horizon, *args, **kwargs): 
-        return  self.studentloan.projection(min(horizon, self.consumptionhorizon)+1)
-      
-    @get_projection.register('wealth')       
-    def wealth_projection(self, horizon, *args, wealthrate, **kwargs):        
-        cashflow = self.cashflow_projection(horizon, *args, wealthrate=wealthrate, **kwargs)
-        return np.cumsum(np.sum(np.multiply(fmatrix(wealthrate, min(horizon, self.consumptionhorizon)+1), cashflow), axis=0))
-
-
-#    def income_projection(self, horizon, incomerate): 
-#        if horizon > self.incomehorizon: return 0
-#        else: return self.income * projection_factor(incomerate, horizon)
-#        
-#    def consumption_projection(self, horizon, risktolerance, discountrate, wealthrate):
-#        return self.consumption * projection_factor(theta(discountrate, wealthrate, risktolerance), horizon)    
-#    
-#    def value_projection(self, horizon, valuerate): return self.value * projection_factor(valuerate, horizon)    
-#    def mortgage_projection(self, horizon): return self.mortgage.projection(horizon)    
-#    def studentloan_projection(self, horizon): return self.studentloan.projection(horizon)    
+    @get_projection.register('cashflow')
+    def cashflow_projection(self, horizon, *args, **kwargs):
+        assert isinstance(horizon, int) and horizon >= 0
+        cashflow = self.saving_projection(horizon, *args, **kwargs)[:-1]
+        return np.concatenate([np.array([self.wealth]), cashflow])    
     
-#    def wealth_projection(self, horizon, risktolerance, discountrate, wealthrate, incomerate): 
-#        w = wealth_factor(wealthrate, horizon)
-#        i = income_factor(incomerate, wealthrate, min(horizon, self.incomehorizon))
-#        c = consumption_factor(theta(discountrate, wealthrate, risktolerance), wealthrate, horizon)
-#        m = loan_factor(wealthrate, min(horizon, self.mortgage.duration)) if self.mortgage else 0
-#        s = loan_factor(wealthrate, min(horizon, self.studentloan.duration)) if self.studentloan else 0
-#        return  w * self.wealth + i * self.income - c * self.consumption - m * self.mortgage.payment - s * self.studentloan.payment
 
-#    def projection(self, horizon, *args, risktolerance, discountrate, wealthrate, incomerate, valuerate, **kwargs):     
-#        assert horizon <= self.consumptionhorizon
-#        incomehorizon = max(self.incomehorizon - horizon, 0)
-#        consumptionhorizon = self.consumptionhorizon - horizon
-#        income = self.income_projection(horizon, incomerate)
-#        wealth = self.wealth_projection(horizon, risktolerance, discountrate, wealthrate, incomerate)
-#        value = self.value_projection(horizon, valuerate)
-#        consumption = self.consumption_projection(horizon, risktolerance, discountrate, wealthrate)
-#        mortgage = self.mortgage_projection(horizon) 
-#        studentloan = self.studentloan_projection(horizon)
-#        assets = dict(wealth=wealth, value=value)
-#        flows = dict(income=income, consumption=consumption)
-#        loans = dict(mortgage=mortgage, studentloan=studentloan)
-#        return self.__class__(incomehorizon, consumptionhorizon, **assets, **flows, **loans)
-
-#    def projection(self, horizon, *args, **kwargs):
-#        incomes = self.income_projection(horizon, *args, **kwargs)
-#        consumptions = self.consumption_projection(horizon, *args, **kwargs)
-#        wealths = self.wealth_projection(horizon, *args, **kwargs)
-#        values = self.value_projection(horizon, *args, **kwargs)
-#        mortgage = self.mortgage_projection(horizon, *args, **kwargs)
-#        studentloan = self.studentloan_projection(horizon, *args, **kwargs)
-#        assert len(incomes) == len(consumptions) == len(wealths) == len(values) == len(mortgage) == len(studentloan) 
+    
 

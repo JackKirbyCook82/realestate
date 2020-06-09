@@ -31,9 +31,6 @@ def createUtility(geography, date, *args, **kwargs):
     indexes = dict(consumption=consumption, crime=crime, school=school, quality=quality, space=space, proximity=proximity, community=community)
     return UtilityFunction.create('cobbdouglas', *args, amplitude=1, subsistences={}, weights={}, diminishrate=1, indexes=indexes, **kwargs)
 
-#def createUtility(geography, date, *args, **kwargs):
-#    pass
-
 
 @UtilityIndex.register('consumption', 'logarithm', {'consumption':1})
 class Consumption_UtilityIndex: 

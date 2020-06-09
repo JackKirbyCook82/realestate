@@ -46,43 +46,14 @@ consumption_factor = lambda cr, wr, n: np.sum(farray(cr, n) * farray(wr, n))
 loan_factor = lambda wr, n: np.sum(farray(wr, n))
 
 
-def createFinancials(geography, date, *args, age, income, consumption, value, mortgage, studentloan, ages, **kwargs): 
-    income_horizon = max((ages['retirement'] - age.index) * 12, 0)
-    consumption_horizon = max((ages['death'] - age.index) * 12, 0)
-    return Financials(income_horizon, consumption_horizon, income=income, consumption=consumption, value=value, mortgage=mortgage, studentloan=studentloan)
+def createFinancials(geography, date, *args, age, income, consumption, value, mortgage, studentloan, lifetimes, **kwargs): 
+    income_horizon = max((lifetimes['retirement'] - age) * 12, 0)
+    consumption_horizon = max((lifetimes['death'] - age) * 12, 0)
+    return Financials(income_horizon, consumption_horizon, income=income/12, consumption=consumption/12, wealth=0, value=value, mortgage=mortgage, studentloan=studentloan)
 
-#def createFinancials(geography, date, *args, age, education, yearoccupied, income, value, rates, ages, educations, banks, **kwargs):
-#    school = educations[str(education).lower()] 
-#    studentloan = banks['studentloan'].loan(school.cost)  
-#    ratevalues = {key:value(date.year, units='month') for key, value in rates.items()}      
-#    
-#    start_age = int(ages['adulthood'] + (school.duration/12))   
-#    occupied_age = int(age) - (int(date.year) - int(yearoccupied))
-#    current_age = int(age)
-#    retirement_age = ages['retirement']
-#    death_age = ages['death']
-#    assert start_age <= occupied_age <= current_age <= death_age
-#
-#    start_year = int(date.year - (int(age) - start_age))  
-#    occupied_year = int(yearoccupied)
-#    current_year = int(date.year)
-#    retirement_year = int(date.year + (retirement_age - int(age)))
-#    death_year = int(date.year + (death_age - int(age)))
-#    assert start_year <= occupied_year <= current_year <= death_year
-#    
-#    income_horizon = max(int((retirement_year - start_year) * 12), 0)
-#    consumption_horizon = int((death_year - start_year) * 12)
-#    income = int(income) / np.prod(np.array([1 + rates['incomerate'](i, units='year') for i in range(start_year, current_year)]))    
-#    financials = Financials.fromLifeTimeCRRAOptimization(income_horizon, consumption_horizon, *args, income=income, studentloan=studentloan, **ratevalues, **kwargs)     
-#    horizon = int((occupied_year - start_year) * 12)
-#    financials = financials(horizon, *args, **ratevalues, **kwargs)
-#    financials = financials.purchase(int(value), bank=banks['mortgage'])
-#    horizon = int((current_year - occupied_year) * 12)
-#    financials = financials(horizon, *args, **ratevalues, **kwargs)
-#    return financials
-
-def createFinancialsKey(*args, incomehorizon, consumptionhorizon, income, wealth, value, consumption, mortgage, studentloan, debt, **kwargs):
-    return (int(incomehorizon), int(consumptionhorizon), int(income), int(wealth), int(value), int(consumption), hash(mortgage), hash(studentloan), hash(debt),)
+def createFinancialsKey(*args, incomehorizon, consumptionhorizon, income, consumption, wealth, value, mortgage, studentloan, debt, **kwargs):
+    mortgage_key, studentloan_key, debt_key = [loan.key if loan else 0 for loan in (mortgage, studentloan, debt,)]    
+    return (incomehorizon, consumptionhorizon, int(income), int(consumption), int(wealth), int(value), hash(mortgage_key), hash(studentloan_key), hash(debt_key),)
 
 
 class UnsolventLifeStyleError(Exception): 
@@ -148,6 +119,13 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     def netpayments(self): return self.consumption + self.mortgage.payment + self.studentloan.payment + self.debt.payment 
     @property
     def netwealth(self): return self.wealth + self.value - self.mortgage.balance - self.studentloan.balance - self.debt.balance
+
+    @property
+    def key(self): return createFinancialsKey(**self.todict())
+    def __ne__(self, other): return not self.__eq__()
+    def __eq__(self, other): 
+        assert isinstance(other, type(self))
+        return self.key == other.key
     
     @property
     def assets(self): return dict(wealth=self.wealth, value=self.value)

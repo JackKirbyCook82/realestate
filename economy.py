@@ -73,7 +73,13 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         content = {'type':self.type, 'balance':round(self.balance, ndigits=1), 'rate':round(self.rate, ndigits=4), 'duration':self.duration}
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, str(value)]) for key, value in content.items()])) 
    
-    def __hash__(self): return hash((self.type, int(self.balance), round(self.rate, 3), int(self.duration),))
+    @property
+    def key(self): return hash((self.type, int(self.balance), round(self.rate, 3), int(self.duration),))
+    def __ne__(self, other): return not self.__eq__()
+    def __eq__(self, other): 
+        assert isinstance(other, type(self))
+        return self.key == other.key
+    
     def __bool__(self): return int(self.balance) > 0    
     def __new__(cls, loantype, *args, balance, rate, duration, basis, **kwargs): 
         rate = _convertrate(basis, 'month', rate)

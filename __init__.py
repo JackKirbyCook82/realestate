@@ -48,9 +48,8 @@ concepts = {
 
 mortgage_bank = Bank('mortgage', rate=0.05, duration=30, financing=0.03, coverage=1.2, loantovalue=0.8, basis='year')
 studentloan_bank = Bank('studentloan', rate=0.07, duration=15, basis='year')
-debt_bank = Bank('debt', rate=0.10, duration=10, basis='year')
-credit_bank = Bank('credit', rate=0.25, duration=5, basis='year')
-    
+debt_bank = Bank('debt', rate=0.25, duration=5, basis='year')       
+
 basic = Education('basic', cost=0, duration=0, basis='year')
 grade = Education('grade', cost=0, duration=3, basis='year')
 associates = Education('associates', cost=25000, duration=5, basis='year')
@@ -59,7 +58,7 @@ graduate = Education('graduate', cost=75000, duration=10, basis='year')
 
 broker = Broker(commissions=0.03)
 educations = {'uneducated':basic, 'gradeschool':grade, 'associates':associates, 'bachelors':bachelors, 'graduate':graduate}
-banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debtbank':debt_bank}
+banks = {'mortgage':mortgage_bank, 'studentloan':studentloan_bank, 'debt':debt_bank}
 
 
 def createHousings(environment):

@@ -73,12 +73,15 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         content = {'type':self.type, 'balance':round(self.balance, ndigits=1), 'rate':round(self.rate, ndigits=4), 'duration':self.duration}
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, str(value)]) for key, value in content.items()])) 
    
+    def __hash__(self): return hash((self.type, int(self.balance), round(self.rate, 3), int(self.duration),))
     def __bool__(self): return int(self.balance) > 0    
     def __new__(cls, loantype, *args, balance, rate, duration, basis, **kwargs): 
         rate = _convertrate(basis, 'month', rate)
         duration = max(int(_convertduration(basis, 'month', duration)), 0)
         return super().__new__(cls, loantype, balance, rate, duration)    
 
+    @property
+    def payment(self): return -np.pmt(self.rate, self.duration, self.balance)
     def __call__(self, horizon):
         balance = loanvalue(self.balance, self.rate, self.duration, min(horizon, self.duration)) 
         duration = max(self.duration - horizon, 0)

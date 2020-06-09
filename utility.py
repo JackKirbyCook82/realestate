@@ -20,7 +20,7 @@ _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else lis
 _filterempty = lambda items: [item for item in _aslist(items) if item]
 
 
-def createUtility(*args, **kwargs):
+def createUtility(geography, date, *args, **kwargs):
     consumption = UtilityIndex.create('consumption', *args, amplitude=1, tolerances={}, **kwargs)
     crime = UtilityIndex.create('crime', *args, amplitude=1, tolerances={}, **kwargs)
     school = UtilityIndex.create('school', *args, amplitude=1, tolerances={}, **kwargs)
@@ -31,11 +31,14 @@ def createUtility(*args, **kwargs):
     indexes = dict(consumption=consumption, crime=crime, school=school, quality=quality, space=space, proximity=proximity, community=community)
     return UtilityFunction.create('cobbdouglas', *args, amplitude=1, subsistences={}, weights={}, diminishrate=1, indexes=indexes, **kwargs)
 
+#def createUtility(geography, date, *args, **kwargs):
+#    pass
+
 
 @UtilityIndex.register('consumption', 'logarithm', {'consumption':1})
 class Consumption_UtilityIndex: 
     def execute(self, housing, household, *args, **kwargs): 
-        return {'consumption':household.consumption}
+        return {'consumption':household.netconsumption}
 
 
 @UtilityIndex.register('crime', 'rtangent', {'poverty':3, 'nonliving':2, 'race':1, 'education':2, 'nonstructure':3, 'trailerpark':1})

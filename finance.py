@@ -12,7 +12,7 @@ from collections import namedtuple as ntuple
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['createFinancials', 'Financials']
+__all__ = ['Financials']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -44,16 +44,6 @@ wealth_factor = lambda wr, n: np.array(1 + wr) ** n
 income_factor = lambda ir, wr, n: np.sum(farray(ir, n) * farray(wr, n))
 consumption_factor = lambda cr, wr, n: np.sum(farray(cr, n) * farray(wr, n)) 
 loan_factor = lambda wr, n: np.sum(farray(wr, n))
-
-
-def createFinancials(geography, date, *args, age, income, consumption, value, mortgage, studentloan, lifetimes, **kwargs): 
-    income_horizon = max((lifetimes['retirement'] - age) * 12, 0)
-    consumption_horizon = max((lifetimes['death'] - age) * 12, 0)
-    return Financials(income_horizon, consumption_horizon, income=income/12, consumption=consumption/12, wealth=0, value=value, mortgage=mortgage, studentloan=studentloan)
-
-def createFinancialsKey(*args, incomehorizon, consumptionhorizon, income, consumption, wealth, value, mortgage, studentloan, debt, **kwargs):
-    mortgage_key, studentloan_key, debt_key = [loan.key if loan else 0 for loan in (mortgage, studentloan, debt,)]    
-    return (incomehorizon, consumptionhorizon, int(income), int(consumption), int(wealth), int(value), hash(mortgage_key), hash(studentloan_key), hash(debt_key),)
 
 
 class UnsolventLifeStyleError(Exception): 
@@ -113,15 +103,18 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         if consumption < 0: raise UnstableLifeStyleError(consumption)  
         return super().__new__(cls, int(income_horizon), int(consumption_horizon), income, wealth, value, consumption, mortgage, studentloan, debt)   
 
-    @property
-    def netconsumption(self): return self.consumption + self.mortgage.payment + self.debt.payment
-    @property
-    def netpayments(self): return self.consumption + self.mortgage.payment + self.studentloan.payment + self.debt.payment 
-    @property
-    def netwealth(self): return self.wealth + self.value - self.mortgage.balance - self.studentloan.balance - self.debt.balance
+#    @property
+#    def netconsumption(self): return self.consumption + self.mortgage.payment + self.debt.payment
+#    @property
+#    def netpayments(self): return self.consumption + self.mortgage.payment + self.studentloan.payment + self.debt.payment 
+#    @property
+#    def netwealth(self): return self.wealth + self.value - self.mortgage.balance - self.studentloan.balance - self.debt.balance
 
     @property
-    def key(self): return createFinancialsKey(**self.todict())
+    def key(self): 
+        mortgage_key, studentloan_key, debt_key = [loan.key if loan else 0 for loan in (self.mortgage, self.studentloan, self.debt,)]    
+        return (self.incomehorizon, self.consumptionhorizon, int(self.income), int(self.consumption), int(self.wealth), int(self.value), hash(mortgage_key), hash(studentloan_key), hash(debt_key),)
+        
     def __ne__(self, other): return not self.__eq__()
     def __eq__(self, other): 
         assert isinstance(other, type(self))
@@ -208,19 +201,6 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         flows = dict(income=self.income, consumption=self.consumption)
         loans = dict(mortgage=mortgage, studentloan=self.studentloan)
         return self.__class__(self.incomehorizon, self.consumptionhorizon, **assets, **flows, **loans)
-
-#    @classmethod
-#    def fromLifeTimeCRRAOptimization(cls, income_horizon, consumption_horizon, *args, income, risktolerance, discountrate, wealthrate, incomerate, **kwargs): 
-#        wealth, terminalwealth = kwargs.get('wealth', 0), kwargs.get('terminalwealth', 0) 
-#        studentloan, debt = kwargs.get('studentloan', None), kwargs.get('debt', None)
-#        w = wealth_factor(wealthrate, consumption_horizon)
-#        i = income_factor(incomerate, wealthrate, min(consumption_horizon, income_horizon))
-#        c = consumption_factor(theta(discountrate, wealthrate, risktolerance), wealthrate, consumption_horizon)
-#        x = loan_factor(wealthrate, min(consumption_horizon, studentloan.duration)) if studentloan else 1
-#        y = loan_factor(wealthrate, min(consumption_horizon, debt.duration)) if debt else 1
-#        consumption = (w * wealth - terminalwealth + i * income - x * (studentloan.payment if studentloan else 0) - y * (debt.payment if debt else 0)) / c      
-#        return Financials(income_horizon, consumption_horizon, wealth=wealth, value=0, income=income, consumption=consumption, studentloan=studentloan, debt=debt)    
-
 
 
 

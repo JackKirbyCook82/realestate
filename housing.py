@@ -12,30 +12,29 @@ from utilities.concepts import concept
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['createHousing', 'Housing']
+__all__ = ['Housing']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousing(geography, date, *args, unit, bedrooms, rooms, sqft, yearbuilt, **kwargs):    
-    space = Space(dict(unit=unit, bedrooms=bedrooms, rooms=rooms, sqft=sqft))
-    quality = Quality(dict(yearbuilt=yearbuilt))
-    return Housing(*args, date=date, geography=geography, space=space, quality=quality, **kwargs)
-
-def createHousingKey(*args, geography, date, space, quality, variables, **kwargs):
+def createHousingKey(*args, geography, date, housing, space, quality, variables, **kwargs):
     unit_index = variables['unit'](space.unit).index
     bedrooms_index = variables['bedrooms'](space.bedrooms).index
     rooms_index = variables['rooms'](space.rooms).index
     sqft_index = variables['sqft'](space.sqft).index
     yearbuilt_index = variables['yearbuilt'](quality.yearbuilt).index
-    return (geography.index, date.index, unit_index, bedrooms_index, rooms_index, sqft_index, yearbuilt_index,)
+    return (geography.index, date.index, int(housing), unit_index, bedrooms_index, rooms_index, sqft_index, yearbuilt_index,)
 
 
+Crime = concept('crime', ['incomelevel', 'race', 'education', 'unit'])
+School = concept('school', ['language', 'education', 'english', 'income', 'value'])
+Community = concept('community', ['race', 'language', 'children', 'education', 'age'])
+Proximity = concept('proximity', ['commute'])
 Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'])
 Quality = concept('quality', ['yearbuilt'])
 
 
-class Housing(ntuple('Housing', 'date geography crime school space community proximity quality')):
+class Housing(ntuple('Housing', 'date geography housing space quality')):
     __instances = {}     
     __stringformat = 'Housing[{count}]|{unit} w/ {sqft} in {geography} builtin {yearbuilt}, ${rent:.0f}/MO Rent, ${price:.0f} Purchase, ${cost:.0f}/MO Cost'           
     def __str__(self): 
@@ -45,7 +44,7 @@ class Housing(ntuple('Housing', 'date geography crime school space community pro
     
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography)} 
-        content.update({'crime':repr(self.crime), 'school':repr(self.school), 'space':repr(self.space), 'community':repr(self.community), 'proximity':repr(self.proximity), 'quality':repr(self.quality)})
+        content.update({'space':repr(self.space), 'quality':repr(self.quality)})
         content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
         content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice), 'sqftcost':str(self.__sqftcost)})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
@@ -93,6 +92,8 @@ class Housing(ntuple('Housing', 'date geography crime school space community pro
     def sqft(self): return self.space.sqft
     @property
     def unit(self): return self.space.unit
+    @property
+    def nethousing(self): return self.housing
     
     @property
     def price(self): return self.__sqftprice * self.sqft      
@@ -100,10 +101,26 @@ class Housing(ntuple('Housing', 'date geography crime school space community pro
     def ownercost(self): return self.__sqftcost * self.sqft    
     @property
     def rentercost(self): return self.__sqftrent * self.sqft    
+  
+    @classmethod
+    def customize(cls, *args, **kwargs):
+        return cls        
+#        ntuple('Housing', 'date geography crime school space community proximity quality')
+      
+    @classmethod
+    def create(cls, geography, date, *args, housing={}, neighborhood={}, rates, prices, **kwargs): 
+        assert isinstance(housing, dict) and isinstance(neighborhood, dict)
+        cls = cls.customize(*args, **kwargs)
+        space, quality = Space(housing), Quality(housing)
+        return cls(*args, geography=geography, date=date, **housing, space=space, quality=quality, **rates, **prices, **kwargs)  
+#        crime = Crime(neighborhood) 
+#        school = School(neighborhood)
+#        community = Community(neighborhood)
+#        proximity = Proximity(neighborhood)
+#        indexes = dict(crime=crime, school=school, community=community, proximity=proximity)
+          
+    
         
-    
-
-    
     
     
     

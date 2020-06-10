@@ -8,20 +8,17 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
-from realestate.finance import createFinancials
-from realestate.utility import createUtility
+from realestate.finance import Financials
+from realestate.utility import Housing_UtilityIndex, Consumption_UtilityIndex
+from realestate.utility import Crime_UtilityIndex, School_UtilityIndex, Quality_UtilityIndex, Space_UtilityIndex, Proximity_UtilityIndex, Community_UtilityIndex
+from realestate.utility import CobbDouglas_UtilityFunction
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['createHousehold', 'Household']
+__all__ = ['Household']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
-
-def createHousehold(geography, date, *args, **kwargs):  
-    financials = createFinancials(geography, date, *args, **kwargs)
-    utility = createUtility(geography, date, *args, **kwargs)      
-    return Household(*args, geography=geography, date=date, financials=financials, utility=utility, **kwargs)    
 
 def createHouseholdKey(*args, date, age, race, language, education, children, size, financials, utility, variables, **kwargs):
     age_index = variables['age'](age).index
@@ -89,8 +86,27 @@ class Household(ntuple('Household', 'date age race language education children s
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
 
-    
+#    @property
+#    def netconsumption(self): return self.financials.netconsumption
 
+    @classmethod
+    def create(cls, geography, date, *args, household={}, financials={}, rates, lifetimes, **kwargs):  
+        assert isinstance(household, dict) and isinstance(financials, dict)
+        income_horizon = max((lifetimes['retirement'] - household['age']) * 12, 0)
+        consumption_horizon = max((lifetimes['death'] - household['age']) * 12, 0)    
+        financials = Financials(income_horizon, consumption_horizon, *args, **financials, **kwargs)
+        consumption = Consumption_UtilityIndex(amplitude=1, tolerances={})
+        housing = Housing_UtilityIndex(amplitude=1, tolerance={})        
+        indexes = dict(consumption=consumption, housing=housing)
+        utility = CobbDouglas_UtilityFunction(amplitude=1, subsistences={}, weights={}, diminishrate=1, indexes=indexes)   
+        return cls(*args, geography=geography, date=date, **household, financials=financials, utility=utility, **rates, lifetimes=lifetimes, **kwargs)            
+#        space = Space_UtilityIndex(amplitude=1, tolerances={})
+#        quality = Quality_UtilityIndex(amplitude=1, tolerances={})
+#        crime = Crime_UtilityIndex(amplitude=1, tolerances={})
+#        school = School_UtilityIndex(amplitude=1, tolerances={})      
+#        proximity = Proximity_UtilityIndex(amplitude=1, tolerances={})
+#        community = Community_UtilityIndex(amplitude=1, tolerances={})        
+    
 
     
     

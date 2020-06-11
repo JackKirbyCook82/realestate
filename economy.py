@@ -16,7 +16,7 @@ from utilities.strings import uppercase, dictstring
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Rate', 'Broker', 'Loan', 'Education', 'Bank']
+__all__ = ['Economy', 'Rate', 'Broker', 'Loan', 'Education', 'Bank']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -45,6 +45,13 @@ def createcurve_average(x, y, *args, **kwargs): return _curve(x, y, (np.average(
 @createcurve.register('last')
 def createcurve_last(x, y, *args, **kwargs): return _curve(x, y, (y[np.argmin(x)], y[np.argmax(x)]))   
 
+
+class Economy(ntuple('Economy', 'wealthrate inflationrate incomerate date purchasingpower')):
+    def __repr__(self):    
+        content = {'purchasingpower':self.purchasingpower}
+        content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
+        return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
+    
 
 class Rate(ntuple('Rate', 'x y basis')):
     def __new__(cls, x, y, *args, basis, **kwargs):

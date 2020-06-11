@@ -86,8 +86,13 @@ class InsufficientCoverageError(Exception):
         super().__init__()
 
 
+def createFinancialsKey(*args, incomehorizon, consumptionhorizon, income, consumption, wealth, value, mortgage, studentloan, **kwargs):
+    mortgage_key, studentloan_key = [loan.key for loan in (mortgage, studentloan)]    
+    return (incomehorizon, consumptionhorizon, int(income), int(consumption), int(wealth), int(value), hash(mortgage_key), hash(studentloan_key),)
+        
+
 class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income wealth value consumption mortgage studentloan')):
-    __stringformat = 'Financials[{horizon}]|Assets=${assets:.0f}, Loans=${loans:.0f}, Income=${income:.0f}/MO, Consumption=${consumption:.0f}/MO'
+    __stringformat = 'Financials({horizon})|Assets=${assets:.0f}, Loans=${loans:.0f}, Income=${income:.0f}/MO, Consumption=${consumption:.0f}/MO'
     def __str__(self): 
         content = {**self.flows, 'horizon':self.consumptionhorizon}
         content.update({'assets':sum([value for value in self.assets.values()])})
@@ -107,16 +112,22 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         studentloan = studentloan if studentloan else Loan('studentloan', balance=0)
         return super().__new__(cls, int(income_horizon), int(consumption_horizon), income, wealth, value, consumption, mortgage, studentloan)   
 
+    def __init__(self, *args, date, discountrate, risktolerance, **kwargs):
+        try: self.__discountrate = discountrate(date.year, units='month')
+        except TypeError: self.__discountrate
+        self.__risktolerance = risktolerance
+
     @property
-    def key(self): 
-        mortgage_key, studentloan_key, debt_key = [loan.key for loan in (self.mortgage, self.studentloan)]    
-        return (self.incomehorizon, self.consumptionhorizon, int(self.income), int(self.consumption), int(self.wealth), int(self.value), hash(mortgage_key), hash(studentloan_key),)
-        
+    def key(self): return hash(createFinancialsKey(**self.todict()))
     def __ne__(self, other): return not self.__eq__()
     def __eq__(self, other): 
         assert isinstance(other, type(self))
         return self.key == other.key
     
+    @property
+    def discountrate(self): return self.__discountrate
+    @property
+    def risktolerance(self): return self.__risktolerance
     @property
     def assets(self): return dict(wealth=self.wealth, value=self.value)
     @property
@@ -130,11 +141,11 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
 
-    def projection(self, *args, discountrate, wealthrate, valuerate, incomerate, risktolerance, **kwargs):       
+    def projection(self, *args, discountrate, wealthrate, valuerate, incomerate, **kwargs):       
         mortgage = loanarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])
         studentloan = loanarray(self.studentloan.balance, self.studentloan.rate, self.studentloan.duration) if self.studentloan else np.array([])
         income = flowarray(self.income, incomerate, self.incomehorizon)
-        consumption = flowarray(self.consumption, theta(discountrate, wealthrate, risktolerance), self.consumptionhorizon)
+        consumption = flowarray(self.consumption, theta(discountrate, wealthrate, self.risktolerance), self.consumptionhorizon)
         value = assetarray(self.value, valuerate, self.consumptionhorizon)
         mortgagepayments = payarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])
         studentloanpayments = payarray(self.studentloan.balance, self.studentloan.rate, self.studentloan.duration) if self.studentloan else np.array([])       
@@ -149,15 +160,15 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         dataframe.name = 'Financials'
         return dataframe
 
-    def __call__(self, horizon, *args, discountrate, wealthrate, valuerate, incomerate, risktolerance, **kwargs):
+    def __call__(self, horizon, *args, wealthrate, valuerate, incomerate, **kwargs):
         assert isinstance(horizon, int) and horizon <= self.consumptionhorizon
         income = flowvalue(self.income, incomerate, min(horizon, self.incomehorizon)) if horizon <= self.incomehorizon else 0
-        consumption = flowvalue(self.consumption, theta(discountrate, wealthrate, risktolerance), horizon) 
+        consumption = flowvalue(self.consumption, theta(self.discountrate, wealthrate, self.risktolerance), horizon) 
         mortgage = self.mortgage(horizon) if self.mortgage else None
         studentloan = self.studentloan(horizon) if self.studentloan else None
         value = assetvalue(self.value, valuerate, horizon) 
         incomearray = flowarray(self.income, incomerate, self.incomehorizon)
-        consumptionarray = flowarray(self.consumption, theta(discountrate, wealthrate, risktolerance), self.consumptionhorizon)
+        consumptionarray = flowarray(self.consumption, theta(self.discountrate, wealthrate, self.risktolerance), self.consumptionhorizon)
         mortgagepayments = payarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])
         studentloanpayments = payarray(self.studentloan.balance, self.studentloan.rate, self.studentloan.duration) if self.studentloan else np.array([])        
         incomearray, consumptionarray, mortgagepayments, studentloanpayments = padarrays(incomearray, consumptionarray, mortgagepayments, studentloanpayments)
@@ -195,7 +206,30 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         loans = dict(mortgage=mortgage, studentloan=self.studentloan)
         return self.__class__(self.incomehorizon, self.consumptionhorizon, **assets, **flows, **loans)
 
-
+    @classmethod
+    def create(cls, *args, income, savings, **kwargs):
+        assert 0 <= savings <= 1
+        return cls(*args, income=int(income/12), consumption=int(income*(1-savings)/12), **kwargs)
+        
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
 

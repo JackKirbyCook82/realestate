@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from collections import namedtuple as ntuple
 
+from realestate.economy import Loan
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ['Financials']
@@ -84,36 +86,31 @@ class InsufficientCoverageError(Exception):
         super().__init__()
 
 
-class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income wealth value consumption mortgage studentloan debt')):
+class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income wealth value consumption mortgage studentloan')):
     __stringformat = 'Financials[{horizon}]|Assets=${assets:.0f}, Loans=${loans:.0f}, Income=${income:.0f}/MO, Consumption=${consumption:.0f}/MO'
     def __str__(self): 
         content = {**self.flows, 'horizon':self.consumptionhorizon}
         content.update({'assets':sum([value for value in self.assets.values()])})
-        content.update({'loans':sum([value.balance if value is not None else 0 for value in self.loans.values()])})        
+        content.update({'loans':sum([value.balance for value in self.loans.values()])})        
         return self.__stringformat.format(**content)     
     
     def __repr__(self): 
         content = {'incomehorizon':str(self.incomehorizon), 'consumptionhorizon':str(self.consumptionhorizon)}
         content.update({key:str(round(value, ndigits=1)) for key, value in self.assets.items()})
         content.update({key:str(round(value, ndigits=1)) for key, value in self.flows.items()})
-        content.update({key:repr(value) for key, value in self.loans.items() if value is not None})
+        content.update({key:repr(value) for key, value in self.loans.items() })
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()])) 
     
-    def __new__(cls, income_horizon , consumption_horizon, *args, income, wealth, value, consumption, mortgage=None, studentloan=None, debt=None, **kwargs):        
+    def __new__(cls, income_horizon , consumption_horizon, *args, income, wealth, value, consumption, mortgage=None, studentloan=None, **kwargs):        
         if consumption < 0: raise UnstableLifeStyleError(consumption)  
-        return super().__new__(cls, int(income_horizon), int(consumption_horizon), income, wealth, value, consumption, mortgage, studentloan, debt)   
-
-#    @property
-#    def netconsumption(self): return self.consumption + self.mortgage.payment + self.debt.payment
-#    @property
-#    def netpayments(self): return self.consumption + self.mortgage.payment + self.studentloan.payment + self.debt.payment 
-#    @property
-#    def netwealth(self): return self.wealth + self.value - self.mortgage.balance - self.studentloan.balance - self.debt.balance
+        mortgage = mortgage if mortgage else Loan('mortgage', balance=0)
+        studentloan = studentloan if studentloan else Loan('studentloan', balance=0)
+        return super().__new__(cls, int(income_horizon), int(consumption_horizon), income, wealth, value, consumption, mortgage, studentloan)   
 
     @property
     def key(self): 
-        mortgage_key, studentloan_key, debt_key = [loan.key if loan else 0 for loan in (self.mortgage, self.studentloan, self.debt,)]    
-        return (self.incomehorizon, self.consumptionhorizon, int(self.income), int(self.consumption), int(self.wealth), int(self.value), hash(mortgage_key), hash(studentloan_key), hash(debt_key),)
+        mortgage_key, studentloan_key, debt_key = [loan.key for loan in (self.mortgage, self.studentloan)]    
+        return (self.incomehorizon, self.consumptionhorizon, int(self.income), int(self.consumption), int(self.wealth), int(self.value), hash(mortgage_key), hash(studentloan_key),)
         
     def __ne__(self, other): return not self.__eq__()
     def __eq__(self, other): 
@@ -125,8 +122,8 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     @property
     def flows(self): return dict(income=self.income, consumption=self.consumption)
     @property
-    def loans(self): return dict(mortgage=self.mortgage, studentloan=self.studentloan, debt=self.debt) 
-   
+    def loans(self): return dict(mortgage=self.mortgage, studentloan=self.studentloan) 
+    
     def todict(self): return self._asdict()
     def __getitem__(self, item): 
         if isinstance(item, (int, slice)): return super().__getitem__(item)
@@ -136,19 +133,17 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     def projection(self, *args, discountrate, wealthrate, valuerate, incomerate, risktolerance, **kwargs):       
         mortgage = loanarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])
         studentloan = loanarray(self.studentloan.balance, self.studentloan.rate, self.studentloan.duration) if self.studentloan else np.array([])
-        debt = loanarray(self.debt.balance, self.debt.rate, self.duration) if self.debt else np.array([])
         income = flowarray(self.income, incomerate, self.incomehorizon)
         consumption = flowarray(self.consumption, theta(discountrate, wealthrate, risktolerance), self.consumptionhorizon)
         value = assetarray(self.value, valuerate, self.consumptionhorizon)
         mortgagepayments = payarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])
         studentloanpayments = payarray(self.studentloan.balance, self.studentloan.rate, self.studentloan.duration) if self.studentloan else np.array([])       
-        debtpayments = payarray(self.debt.balance, self.debt.rate, self.debt.duration) if self.debt else np.array([])
-        income, consumption, mortgagepayments, studentloanpayments, debtpayments = padarrays(income, consumption, mortgagepayments, studentloanpayments, debtpayments)
-        savings = addarrays(income, -consumption, -mortgagepayments, -studentloanpayments, -debtpayments)
+        income, consumption, mortgagepayments, studentloanpayments = padarrays(income, consumption, mortgagepayments, studentloanpayments)
+        savings = addarrays(income, -consumption, -mortgagepayments, -studentloanpayments)
         cashflows = np.concatenate([np.array([self.wealth]), savings])
         wealth = investarray(cashflows, wealthrate)[:-1]
-        income, consumption, wealth, value, mortgage, studentloan, debt = padarrays(income, consumption, wealth, value, mortgage, studentloan, debt) 
-        data = {'Income':income, 'Consumption':consumption, 'Wealth':wealth, 'Value':value, 'Mortgage':mortgage, 'Studentloan':studentloan, 'Debt':debt}
+        income, consumption, wealth, value, mortgage, studentloan = padarrays(income, consumption, wealth, value, mortgage, studentloan) 
+        data = {'Income':income, 'Consumption':consumption, 'Wealth':wealth, 'Value':value, 'Mortgage':mortgage, 'Studentloan':studentloan}
         dataframe = pd.DataFrame(data)
         dataframe.index.name = 'Horizon'
         dataframe.name = 'Financials'
@@ -160,22 +155,20 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         consumption = flowvalue(self.consumption, theta(discountrate, wealthrate, risktolerance), horizon) 
         mortgage = self.mortgage(horizon) if self.mortgage else None
         studentloan = self.studentloan(horizon) if self.studentloan else None
-        debt = self.debt(horizon) if self.debt else None
         value = assetvalue(self.value, valuerate, horizon) 
         incomearray = flowarray(self.income, incomerate, self.incomehorizon)
         consumptionarray = flowarray(self.consumption, theta(discountrate, wealthrate, risktolerance), self.consumptionhorizon)
         mortgagepayments = payarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])
         studentloanpayments = payarray(self.studentloan.balance, self.studentloan.rate, self.studentloan.duration) if self.studentloan else np.array([])        
-        debtpayments = payarray(self.debt.balance, self.debt.rate, self.debt.duration) if self.debt else np.array([])
-        incomearray, consumptionarray, mortgagepayments, studentloanpayments, debtpayments = padarrays(incomearray, consumptionarray, mortgagepayments, studentloanpayments, debtpayments)
-        savings = addarrays(incomearray, -consumptionarray, -mortgagepayments, -studentloanpayments, -debtpayments)       
+        incomearray, consumptionarray, mortgagepayments, studentloanpayments = padarrays(incomearray, consumptionarray, mortgagepayments, studentloanpayments)
+        savings = addarrays(incomearray, -consumptionarray, -mortgagepayments, -studentloanpayments)       
         cashflows = np.concatenate([np.array([self.wealth]), savings])
         wealth = investarray(cashflows, wealthrate)[horizon]
         consumptionhorizon = self.consumptionhorizon - horizon 
         incomehorizon = max(self.incomehorizon - horizon, 0)
         assets = dict(wealth=wealth, value=value)
         flows = dict(income=income, consumption=consumption)
-        loans = dict(mortgage=mortgage, studentloan=studentloan, debt=debt)
+        loans = dict(mortgage=mortgage, studentloan=studentloan)
         return self.__class__(incomehorizon, consumptionhorizon, **assets, **flows, **loans)
         
     def sale(self, *args, broker, **kwargs):

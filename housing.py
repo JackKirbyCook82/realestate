@@ -17,13 +17,13 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousingKey(*args, geography, date, housing, space, quality, variables, **kwargs):
+def createHousingKey(*args, geography, date, space, quality, variables, **kwargs):
     unit_index = variables['unit'](space.unit).index
     bedrooms_index = variables['bedrooms'](space.bedrooms).index
     rooms_index = variables['rooms'](space.rooms).index
     sqft_index = variables['sqft'](space.sqft).index
     yearbuilt_index = variables['yearbuilt'](quality.yearbuilt).index
-    return (geography.index, date.index, int(housing), unit_index, bedrooms_index, rooms_index, sqft_index, yearbuilt_index,)
+    return (geography.index, date.index, unit_index, bedrooms_index, rooms_index, sqft_index, yearbuilt_index,)
 
 
 Crime = concept('crime', ['incomelevel', 'race', 'education', 'unit'])
@@ -34,7 +34,7 @@ Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'])
 Quality = concept('quality', ['yearbuilt'])
 
 
-class Housing(ntuple('Housing', 'date geography housing space quality')):
+class Housing(ntuple('Housing', 'date geography space quality')):
     __instances = {}     
     __stringformat = 'Housing[{count}]|{unit} w/ {sqft} in {geography} builtin {yearbuilt}, ${rent:.0f}/MO Rent, ${price:.0f} Purchase, ${cost:.0f}/MO Cost'           
     def __str__(self): 
@@ -71,10 +71,11 @@ class Housing(ntuple('Housing', 'date geography housing space quality')):
             cls.__instances[key] = newinstance
             return newinstance
 
-    def __init__(self, *args, sqftprice, sqftrent, sqftcost, rentrate, valuerate, variables, **kwargs): 
+    def __init__(self, *args, sqftprice, sqftrent, sqftcost, rentrate, valuerate, variables, valuation, **kwargs): 
+        self.__valuation = valuation if hasattr(valuation, '__call__') else lambda *args, **kwargs: valuation
         self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost     
         self.__rentrate, self.__valuerate = rentrate, valuerate
-        self.__variables = variables
+        self.__variables = variables        
         try: self.__count = self.__count + 1
         except AttributeError: self.__count = 1
 
@@ -83,7 +84,9 @@ class Housing(ntuple('Housing', 'date geography housing space quality')):
         if isinstance(item, (int, slice)): return super().__getitem__(item)
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
-    
+
+    @property
+    def valuation(self): return self.__valuation(**self.todict())    
     @property
     def yearbuilt(self): return self.quality.yearbuilt
     @property
@@ -92,8 +95,6 @@ class Housing(ntuple('Housing', 'date geography housing space quality')):
     def sqft(self): return self.space.sqft
     @property
     def unit(self): return self.space.unit
-    @property
-    def nethousing(self): return self.housing
     
     @property
     def price(self): return self.__sqftprice * self.sqft      

@@ -59,7 +59,7 @@ class Household(ntuple('Household', 'date age race language education children s
     @property
     def risktolerance(self): return self.__risktolerance
     @property
-    def rates(self): return dict(discountrate=self.__discountrate, wealthrate=self.__wealthrate, valuerate=self.__valuerate, incomerate=self.__incomerate)
+    def rates(self): return dict(discountrate=self.__discountrate, wealthrate=self.__wealthrate, valuerate=self.__valuerate, incomerate=self.__incomerate, inflationrate=self.__inflationrate)
     
     @property
     def count(self): return self.__count    
@@ -73,8 +73,10 @@ class Household(ntuple('Household', 'date age race language education children s
             cls.__instances[key] = newinstance
             return newinstance
     
-    def __init__(self, *args, risktolerance, discountrate, wealthrate, valuerate, incomerate, variables, **kwargs):                
-        self.__discountrate, self.__wealthrate, self.__valuerate, self.__incomerate = discountrate, wealthrate, valuerate, incomerate
+    def __init__(self, *args, risktolerance, discountrate, wealthrate, valuerate, incomerate, inflationrate, variables, **kwargs):                
+        self.__discountrate, self.__wealthrate, self.__valuerate = discountrate, wealthrate, valuerate
+        self.__incomerate = incomerate
+        self.__inflationrate = inflationrate
         self.__risktolerance = risktolerance       
         self.__variables = variables
         try: self.__count = self.__count + 1
@@ -85,9 +87,6 @@ class Household(ntuple('Household', 'date age race language education children s
         if isinstance(item, (int, slice)): return super().__getitem__(item)
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
-
-#    @property
-#    def netconsumption(self): return self.financials.netconsumption
 
     @classmethod
     def create(cls, geography, date, *args, household={}, financials={}, rates, lifetimes, **kwargs):  

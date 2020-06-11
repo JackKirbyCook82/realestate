@@ -74,7 +74,9 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, str(value)]) for key, value in content.items()])) 
    
     @property
-    def key(self): return hash((self.type, int(self.balance), round(self.rate, 3), int(self.duration),))
+    def key(self): 
+        if self.balance: return (self.type, int(self.balance), round(self.rate, 3), int(self.duration),)
+        else: return (self.type, int(self.balance))
     def __ne__(self, other): return not self.__eq__()
     def __eq__(self, other): 
         assert isinstance(other, type(self))
@@ -82,12 +84,12 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
     
     def __bool__(self): return int(self.balance) > 0    
     def __new__(cls, loantype, *args, balance, rate, duration, basis, **kwargs): 
-        rate = _convertrate(basis, 'month', rate)
+        rate = _convertrate(basis, 'month', rate) if balance > 0 else None
         duration = max(int(_convertduration(basis, 'month', duration)), 0)
         return super().__new__(cls, loantype, balance, rate, duration)    
 
     @property
-    def payment(self): return -np.pmt(self.rate, self.duration, self.balance)
+    def payment(self): return -np.pmt(self.rate, self.duration, self.balance) if self.balance else 0
     def __call__(self, horizon):
         balance = loanvalue(self.balance, self.rate, self.duration, min(horizon, self.duration)) 
         duration = max(self.duration - horizon, 0)

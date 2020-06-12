@@ -37,8 +37,9 @@ class Spending_UtilityIndex:
 @UtilityIndex.register('housing', 'logarithm', parameters=('housing',))
 class Housing_UtilityIndex: 
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
-    def execute(self, *args, housing, household, **kwargs): 
-        housing_expenditure_valuation = housing.valuation
+    def execute(self, *args, housing, household, date, **kwargs): 
+        function = lambda sqft, year: (sqft / 100) + (30 - date.year - year)
+        housing_expenditure_valuation = function(housing.space.sqft, housing.quality.yearbuilt)
         return {'housing':housing_expenditure_valuation}
     
 

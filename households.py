@@ -18,6 +18,10 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
+class PrematureHouseholderError(Exception): pass
+class DeceasedHouseholderError(Exception): pass
+
+
 def createHouseholdKey(*args, date, age, race, language, education, children, size, financials, utility, variables, **kwargs):
     age_index = variables['age'](age).index
     race_index =variables['race'](race).index
@@ -28,14 +32,10 @@ def createHouseholdKey(*args, date, age, race, language, education, children, si
     return (date.index, age_index, race_index, language_index, education_index, children_index, size_index, hash(financials.key), hash(utility.key),)
 
 
-class PrematureHouseholderError(Exception): pass
-class DeceasedHouseholderError(Exception): pass
-
-
 class Household(ntuple('Household', 'date age race language education children size financials utility')):
     __lifetimes = {'adulthood':15, 'retirement':65, 'death':95}  
     __utility = 'cobbdouglas'
-    __indexes = ('housing', 'spending',)
+    __indexes = ('spending', 'crime', 'school', 'quality', 'space', 'proximity', 'community',)
     __variables = dict()
     
     @classmethod
@@ -44,7 +44,7 @@ class Household(ntuple('Household', 'date age race language education children s
         cls.__variables = kwargs.get('variables', cls.__variables)
         cls.__lifetimes = kwargs.get('lifetimes', cls.__lifetimes)   
         cls.__utility = kwargs.get('utility', cls.__utility)
-        cls.__indexes = kwargs.get('indexes', cls.__utilities)
+        cls.__indexes = kwargs.get('indexes', cls.__indexes)
     
     __stringformat = 'Household[{count}]|{race} HH speaking {language} {children}, {age}, {size}, {education} Education'          
     def __str__(self):  

@@ -17,22 +17,13 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-class RequiredFieldMissingError(Exception): pass
-
-
-def createHousingKey(*args, geography, date, housing={}, variables={}, **kwargs):
-    housing_indexes  = []
-    for conceptkey, conceptvalue in sorted(housing.items()):
-        for field, value in sorted(conceptvalue.todict().items()):
-            housing_indexes.append(variables[field](value).index if field in variables.keys() else value)
-    return (geography.index, date.index, *housing_indexes)
-
-
-def transverse(field, **concepts):
-    for conceptkey, conceptvalue in concepts.todict().items():
-        try: return conceptvalue[field]
-        except KeyError: pass
-    raise RequiredFieldMissingError()
+def createHousingKey(*args, geography, date, concepts={}, variables={}, **kwargs):
+    indexes = []
+    for conceptkey, conceptvalue in concepts.items():
+        for field, value in conceptvalue.todict().items():
+            if field in variables.keys(): indexes.append(variables[field](value).index)
+            else: indexes.append(value)
+    return (geography.index, date.index, *indexes)
 
 
 Crime = concept('crime', ['incomelevel', 'race', 'education', 'unit'])
@@ -43,53 +34,52 @@ Space = concept('space', ['unit', 'bedrooms', 'rooms', 'sqft'])
 Quality = concept('quality', ['yearbuilt'])
 
 
-class Housing(ntuple('Housing', 'date geography housing neighborhood')):
+class Housing(ntuple('Housing', 'geography date concepts')):
     __concepts = dict(space=Space, quality=Quality, crime=Crime, school=School, community=Community, proximity=Proximity)
-    __housing = tuple()
-    __neighborhood = tuple()
+    __parameters = ('space', 'quality', 'crime', 'school', 'community', 'proximity',)
     __variables = dict()
-    
+
     @classmethod
     def customize(cls, *args, **kwargs):
+        try: cls.__concepts.update(kwargs['concepts'])
+        except KeyError: pass
         cls.__stringformat = kwargs.get('stringformat', cls.__stringformat)
         cls.__variables = kwargs.get('variables', cls.__variables)    
-        cls.__concepts = kwargs.get('concepts', cls.__concepts)
-        cls.__neighborhood = kwargs.get('neighborhood', cls.__housing)     
-        cls.__housing = kwargs.get('housing', cls.__neighborhood)     
+        cls.__parameters = kwargs.get('parameters', cls.__parameters)
     
     __stringformat = 'Housing[{count}]|{unit} w/ {sqft} in {geography} builtin {yearbuilt} \nPricing|${rent:.0f}/MO Rent, ${price:.0f} Purchase, ${cost:.0f}/MO Cost'           
     def __str__(self): 
         content = {field:getattr(self, field) for field in ('unit', 'sqft', 'yearbuilt',)}
-        content = {field:self.__variables[field](value) if field in self.__valuation.keys() else value for field, value in content.items()}
+        content = {key:self.__variables[key](value) if key in self.__variables.keys() else value for key, value in content.items()}
         return self.__stringformat.format(count=self.count, geography=str(self.geography), rent=self.rentercost, price=self.price, cost=self.ownercost, **content)  
     
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography)} 
         content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice), 'sqftcost':str(self.__sqftcost)})
-        content.update({'neighborhood':{conceptkey:repr(self.neighborhood[conceptkey]) for conceptkey in self.__neighborhood}})
-        content.update({'housing':{conceptkey:repr(self.housing[conceptkey]) for conceptkey in self.__housing}})
+        content.update({'concepts':{key:repr(value) for key, value in self.concepts.items()}})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
     __instances = {}      
     @property
     def count(self): return self.__count
-    def __new__(cls, *args, **kwargs):   
-        key = hash(createHousingKey(*args, **kwargs))
+    def __new__(cls, *args, geography, date, concepts, **kwargs):   
+        key = hash(createHousingKey(geography=geography, date=date, concepts=concepts, variables=cls.__variables))
         try: return cls.__instances[key]
         except KeyError:
-            newinstance = super().__new__(cls, **{field:kwargs[field] for field in cls._fields})
+            newinstance = super().__new__(cls, geography=geography, date=date, concepts=concepts)
             cls.__instances[key] = newinstance
             return newinstance
 
     def __init__(self, *args, sqftprice, sqftrent, sqftcost, rentrate, valuerate, date, **kwargs): 
-        self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost 
-        try: self.__valuerate = valuerate(date.year, units='month')
-        except TypeError: self.__discountrate
-        try: self.__rentrate = rentrate(date.year, units='month')
-        except TypeError: self.__discountrate               
         try: self.__count = self.__count + 1
-        except AttributeError: self.__count = 1
-
+        except AttributeError: 
+            self.__count = 1 
+            self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost 
+            try: self.__valuerate = valuerate(date.year, units='month')
+            except TypeError: self.__discountrate
+            try: self.__rentrate = rentrate(date.year, units='month')
+            except TypeError: self.__discountrate              
+             
     def todict(self): return self._asdict()
     def __getitem__(self, item): 
         if isinstance(item, (int, slice)): return super().__getitem__(item)
@@ -104,17 +94,26 @@ class Housing(ntuple('Housing', 'date geography housing neighborhood')):
         return all([self.key == other.key, self.rates == other.rates, self.prices == other.prices])  
 
     @property
-    def sqft(self): return transverse('sqft', self.housing)
+    def unit(self): return self.getfield('unit')
     @property
-    def unit(self): return transverse('unit', self.housing)
+    def sqft(self): return self.getfield('sqft')
     @property
-    def yearbuilt(self): return transverse('yearbuilt', self.housing)
+    def yearbuilt(self): return self.getfield('yearbuilt')   
+    def getfield(self, field):
+        for conceptkey, conceptvalue in self.concepts.items():
+            try: return getattr(conceptvalue, field)
+            except AttributeError: pass
+        raise KeyError(field)    
     
+    @property
+    def rates(self): return dict(valuerate=self.valuerate, rentrate=self.rentrate)    
     @property
     def valuerate(self): return self.__valuerate
     @property
     def rentrate(self): return self.__rentrate    
     
+    @property
+    def prices(self): return dict(sqftrent=self.__sqftrent, sqftprice=self.__sqftprice, sqftcost=self.__sqftcost)
     @property
     def price(self): return self.__sqftprice * self.sqft      
     @property
@@ -125,15 +124,11 @@ class Housing(ntuple('Housing', 'date geography housing neighborhood')):
     @classmethod
     def create(cls, *args, housing={}, neighborhood={}, **kwargs):         
         assert isinstance(housing, dict) and isinstance(neighborhood, dict)
-        housing = {conceptkey:cls.__concepts[conceptkey](**housing) for conceptkey in cls.__housing}
-        neighborhood = {conceptkey:cls.__concepts[conceptkey](**neighborhood) for conceptkey in cls.__neighborhood}        
-        transverse('sqft', housing) 
-        transverse('unit', housing) 
-        transverse('yearbuilt', housing)
-        return cls(*args, housing=housing, neightborhood=neighborhood, **kwargs)  
+        concepts = {parameter:cls.__concepts[parameter]({**housing, **neighborhood}, *args, **kwargs) for parameter in cls.__parameters}
+        fields = [field for conceptkey, conceptvalue in concepts.items() for field, value in conceptvalue.todict().items()]
+        assert all([field in fields for field in ('unit', 'sqft', 'yearbuilt',)])
+        return cls(*args, **housing, **neighborhood, concepts=concepts, **kwargs)  
         
-    
-    
 
     
     

@@ -90,7 +90,7 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         return self.key == other.key
     
     def __bool__(self): return int(self.balance) > 0    
-    def __new__(cls, loantype, *args, balance, rate, duration, basis, **kwargs): 
+    def __new__(cls, loantype, *args, balance, rate=None, duration=0, basis, **kwargs): 
         rate = _convertrate(basis, 'month', rate) if balance > 0 else None
         duration = max(int(_convertduration(basis, 'month', duration)), 0)
         return super().__new__(cls, loantype, balance, rate, duration)    

@@ -108,12 +108,14 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     
     def __new__(cls, income_horizon , consumption_horizon, *args, income, wealth, value, consumption, mortgage=None, studentloan=None, **kwargs):        
         if consumption < 0: raise UnstableLifeStyleError(consumption)  
-        mortgage = mortgage if mortgage else Loan('mortgage', balance=0)
-        studentloan = studentloan if studentloan else Loan('studentloan', balance=0)
+        mortgage = mortgage if mortgage else Loan('mortgage', balance=0, basis='month')
+        studentloan = studentloan if studentloan else Loan('studentloan', balance=0, basis='month')
         return super().__new__(cls, int(income_horizon), int(consumption_horizon), income, wealth, value, consumption, mortgage, studentloan)   
 
     def __init__(self, *args, date, discountrate, risktolerance, **kwargs):
-        try: self.__discountrate = discountrate(date.year, units='month')
+        try: year = date.year
+        except: year = int(date)
+        try: self.__discountrate = discountrate(year, units='month')
         except TypeError: self.__discountrate
         self.__risktolerance = risktolerance
 

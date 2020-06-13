@@ -22,8 +22,9 @@ _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else lis
 _filterempty = lambda items: [item for item in _aslist(items) if item]
 
 
-@UtilityIndex.register('spending', 'logarithm', parameters=('spending',))
+@UtilityIndex.register('spending', 'additive', parameters=('spending',))
 class Spending_UtilityIndex: 
+    @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)
     def execute(self, *args, housing, household, date, economy, owned, **kwargs): 
         assert isinstance(owned, bool)
@@ -34,17 +35,17 @@ class Spending_UtilityIndex:
         return {'spending':spending_expenditure_valuation}
     
 
-@UtilityIndex.register('housing', 'logarithm', parameters=('housing',))
+@UtilityIndex.register('housing', 'additive', parameters=('sqft', 'yearbuilt',))
 class Housing_UtilityIndex: 
+    @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
     def execute(self, *args, housing, household, date, **kwargs): 
-        function = lambda sqft, year: (sqft / 100) + (30 - date.year - year)
-        housing_expenditure_valuation = function(housing.space.sqft, housing.quality.yearbuilt)
-        return {'housing':housing_expenditure_valuation}
+        return {'sqft':housing.space.sqft, 'yearbuilt':housing.quality.yearbuilt}
     
 
 @UtilityIndex.register('crime', 'rtangent', parameters=('poverty', 'nonliving', 'race', 'education', 'nonstructure', 'trailerpark',))
 class Crime_UtilityIndex:
+    @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
     def execute(self, *args, housing, household, **kwargs):
         poverty = housing.crime.incomelevel['Poverty'] / housing.crime.incomelevel.total()
@@ -58,6 +59,7 @@ class Crime_UtilityIndex:
 
 @UtilityIndex.register('school', 'tangent', parameters=('language', 'education', 'race', 'english', 'income', 'value',))
 class School_UtilityIndex:
+    @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
     def execute(self, *args, housing, household, **kwargs):
         language = housing.school.language['English'] / housing.school.language.total()
@@ -71,6 +73,7 @@ class School_UtilityIndex:
 
 @UtilityIndex.register('quality', 'inverted', parameters=('age',))
 class Quality_UtilityIndex: 
+    @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
     def execute(self, *args, housing, household, date, **kwargs): 
         return {'age':date.year - housing.quality.yearbuilt + 1}
@@ -78,6 +81,7 @@ class Quality_UtilityIndex:
 
 @UtilityIndex.register('space', 'logarithm', parameters=('bed/ppl', 'sqft/ppl', 'sqft', 'sqft/bedroom', 'unit',))
 class Space_UtilityIndex: 
+    @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
     def execute(self, *args, housing, household, **kwargs): 
         return {'bed/ppl':max(housing.space.bedrooms/household.size, 1), 'sqft/ppl':housing.space.sqft/household.size, 'sqft':housing.space.sqft,
@@ -86,6 +90,7 @@ class Space_UtilityIndex:
 
 @UtilityIndex.register('proximity', 'inverted', parameters=('avgcommute', 'midcommute', 'stdcommute',))
 class Proximity_UtilityIndex: 
+    @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
     def execute(self, *args, housing, household, **kwargs): 
         return {'avgcommute':housing.proximity.commute.mean(), 'midcommute':housing.proximity.commute.median(), 
@@ -94,6 +99,7 @@ class Proximity_UtilityIndex:
 
 @UtilityIndex.register('community', 'tangent', parameters=('race', 'age', 'children', 'education', 'language',))
 class Community_UtilityIndex: 
+    @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
     def execute(self, *args, housing, household, **kwargs): 
         race = housing.community.race[household.race] / housing.community.race.total()
@@ -104,11 +110,12 @@ class Community_UtilityIndex:
         return {'race':race, 'age':age, 'children':children, 'education':education, 'language':language}
   
 
-@UtilityFunction.register('cobbdouglas', 'cobbdouglas', coefficents=('elasticity',), parameters=('spending', 'housing', 'crime', 'school', 'quality', 'space', 'proximity', 'community',))
+@UtilityFunction.register('cobbdouglas', 'cobbdouglas', coefficents=('elasticity',))
 class CobbDouglas_UtilityFunction: 
-    def create(cls, indexes, *args, **kwargs):        
-        assert isinstance(indexes, (tuple, list))
-        indexes = {UtilityIndex[parameter](*args, **kwargs) for parameter in cls.parameters if parameter in indexes}
+    @classmethod
+    def create(cls, parameters, *args, **kwargs):        
+        assert isinstance(parameters, (tuple, list))
+        indexes = {parameter:UtilityIndex.getfunction(parameter)(*args, **kwargs) for parameter in parameters}
         return cls(amplitude=1, diminishrate=1, elasticity=1, subsistences={}, weights={}, indexes=indexes)
 
 

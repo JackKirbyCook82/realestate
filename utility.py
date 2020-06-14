@@ -6,8 +6,6 @@ Created on Sun Feb 23 2020
 
 """
 
-import numpy as np
-
 from utilities.utility import UtilityIndex, UtilityFunction
 
 __version__ = "1.0.0"
@@ -22,18 +20,13 @@ _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else lis
 _filterempty = lambda items: [item for item in _aslist(items) if item]
 
 
-@UtilityIndex.register('spending', 'additive', parameters=('spending',))
-class Spending_UtilityIndex: 
+@UtilityIndex.register('consumption', 'additive', parameters=('consumption',))
+class Consumption_UtilityIndex: 
     @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)
-    def execute(self, *args, housing, household, date, economy, owned, **kwargs): 
-        assert isinstance(owned, bool)
-        if owned: spending_expenditure = household.financials.consumption - housing.rentercost
-        else: spending_expenditure = household.financials.consumption - housing.ownercost - household.financials.mortgage.payment
-        factor = np.prod(np.array([economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
-        spending_expenditure_valuation = spending_expenditure * factor * economy.purchasingpower
-        return {'spending':spending_expenditure_valuation}
-    
+    def execute(self, *args, housing, household, consumption,**kwargs): 
+        return {'consumption':consumption}
+        
 
 @UtilityIndex.register('housing', 'additive', parameters=('sqft', 'yearbuilt',))
 class Housing_UtilityIndex: 

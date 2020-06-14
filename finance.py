@@ -48,44 +48,6 @@ consumption_factor = lambda cr, wr, n: np.sum(farray(cr, n) * farray(wr, n))
 loan_factor = lambda wr, n: np.sum(farray(wr, n))
 
 
-class UnsolventLifeStyleError(Exception): 
-    @property
-    def wealth(self): return self.__wealth
-    def __str__(self): return '${}'.format(self.wealth)
-    def __init__(self, wealth): 
-        assert wealth < 0
-        self.__wealth = int(abs(wealth))
-        super().__init__()
-    
-class UnstableLifeStyleError(Exception): 
-    @property
-    def consumption(self): return self.__consumption
-    def __str__(self): return '-${}/MO'.format(self.deficit)    
-    def __init__(self, consumption): 
-        assert consumption < 0
-        self.__consumption = int(abs(consumption))
-        super().__init__()
-
-class InsufficientFundsError(Exception): 
-    @property
-    def wealth(self): return self.__wealth
-    def __str__(self): return '${}'.format(self.wealth)
-    def __init__(self, wealth): 
-        assert wealth < 0
-        self.__wealth = int(abs(wealth))
-        super().__init__()
-
-class InsufficientCoverageError(Exception):
-    @property
-    def coverage(self): return self.__coverage
-    @property
-    def required(self): return self.__required
-    def __str__(self): return '{:.2f} < {:.2f}'.format(self.coverage, self.__required)
-    def __init__(self, coverage, required): 
-        self.__coverage, self.__required = coverage, required
-        super().__init__()
-
-
 def createFinancialsKey(*args, incomehorizon, consumptionhorizon, income, consumption, wealth, value, mortgage, studentloan, **kwargs):
     mortgage_key, studentloan_key = [loan.key for loan in (mortgage, studentloan)]    
     return (incomehorizon, consumptionhorizon, int(income), int(consumption), int(wealth), int(value), hash(mortgage_key), hash(studentloan_key),)
@@ -106,8 +68,7 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         content.update({key:repr(value) for key, value in self.loans.items() })
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()])) 
     
-    def __new__(cls, income_horizon , consumption_horizon, *args, income, wealth, value, consumption, mortgage=None, studentloan=None, **kwargs):        
-        if consumption < 0: raise UnstableLifeStyleError(consumption)  
+    def __new__(cls, income_horizon , consumption_horizon, *args, income, wealth, value, consumption, mortgage=None, studentloan=None, **kwargs):         
         mortgage = mortgage if mortgage else Loan('mortgage', balance=0, basis='month')
         studentloan = studentloan if studentloan else Loan('studentloan', balance=0, basis='month')
         return super().__new__(cls, int(income_horizon), int(consumption_horizon), income, wealth, value, consumption, mortgage, studentloan)   
@@ -198,11 +159,7 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         downpayment = bank.downpayment(value)
         closingcost = bank.cost(value - downpayment)
         wealth = self.wealth - downpayment - closingcost
-        mortgage = bank.loan(value - downpayment)   
-        payments = sum([loan.payment for loan in self.loans.values() if loan])
-        coverage = self.income / payments        
-        if wealth < 0: raise InsufficientFundsError(wealth)       
-        if coverage < bank.coverage: raise InsufficientCoverageError(coverage, bank.coverage)
+        mortgage = bank.loan(value - downpayment)            
         assets = dict(wealth=wealth, value=value)
         flows = dict(income=self.income, consumption=self.consumption)
         loans = dict(mortgage=mortgage, studentloan=self.studentloan)

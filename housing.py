@@ -56,7 +56,7 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography)} 
         content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice), 'sqftcost':str(self.__sqftcost)})
-        content.update({'concepts':{key:repr(value) for key, value in self.concepts.items()}})
+        content.update({key:repr(value) for key, value in self.concepts.items()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
     __instances = {}      
@@ -70,10 +70,10 @@ class Housing(ntuple('Housing', 'geography date concepts')):
             cls.__instances[key] = newinstance
             return newinstance
 
-    def __init__(self, *args, sqftprice, sqftrent, sqftcost, rentrate, valuerate, date, **kwargs): 
-        try: self.__count = self.__count + 1
+    def __init__(self, *args, count=1, sqftprice, sqftrent, sqftcost, rentrate, valuerate, date, **kwargs): 
+        try: self.__count = self.__count + count
         except AttributeError: 
-            self.__count = 1 
+            self.__count = count 
             self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost 
             try: self.__valuerate = valuerate(date.year, units='month')
             except TypeError: self.__discountrate

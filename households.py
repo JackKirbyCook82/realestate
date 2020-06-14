@@ -53,7 +53,7 @@ class Household(ntuple('Household', 'date age race language education children s
         return '\n'.join([householdstring, financialstring])        
     
     def __repr__(self): 
-        content = {'utility':repr(self.__utility), 'financials':repr(self.__financials)}
+        content = {'utility':repr(self.utility), 'financials':repr(self.financials)}
         content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
@@ -70,9 +70,9 @@ class Household(ntuple('Household', 'date age race language education children s
             cls.__instances[key] = newinstance
             return newinstance
     
-    def __init__(self, *args, **kwargs):                    
-        try: self.__count = self.__count + 1
-        except AttributeError: self.__count = 1
+    def __init__(self, *args, count=1, **kwargs):                    
+        try: self.__count = self.__count + count
+        except AttributeError: self.__count = count
     
     @property
     def key(self): return hash(createHouseholdKey(**self.todict(), variables=self.__variables))   

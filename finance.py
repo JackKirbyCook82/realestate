@@ -48,6 +48,11 @@ consumption_factor = lambda cr, wr, n: np.sum(farray(cr, n) * farray(wr, n))
 loan_factor = lambda wr, n: np.sum(farray(wr, n))
 
 
+class InsufficientFundError(Exception): pass
+class InsufficientCoverageError(Exception): pass
+class UnsolventLifeStyleError(Exception): pass
+
+
 def createFinancialsKey(*args, incomehorizon, consumptionhorizon, income, consumption, wealth, value, mortgage, studentloan, **kwargs):
     mortgage_key, studentloan_key = [loan.key for loan in (mortgage, studentloan)]    
     return (incomehorizon, consumptionhorizon, int(income), int(consumption), int(wealth), int(value), hash(mortgage_key), hash(studentloan_key),)
@@ -79,6 +84,7 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         try: self.__discountrate = discountrate(year, units='month')
         except TypeError: self.__discountrate
         self.__risktolerance = risktolerance
+        if self.ponzi(*args, **kwargs): raise UnsolventLifeStyleError()
 
     @property
     def key(self): return hash(createFinancialsKey(**self.todict()))
@@ -104,11 +110,15 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
 
-    def projection(self, *args, discountrate, wealthrate, valuerate, incomerate, **kwargs):       
+    def ponzi(self, *args, **kwargs):
+        terminalfinancials = self.projection(self.consumptionhorizon, *args, **kwargs)
+        return terminalfinancials.wealth + terminalfinancials.value < terminalfinancials.mortgage.balance + terminalfinancials.studentloan.balance
+
+    def projection(self, *args, wealthrate, valuerate, incomerate, **kwargs):       
         mortgage = loanarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])
         studentloan = loanarray(self.studentloan.balance, self.studentloan.rate, self.studentloan.duration) if self.studentloan else np.array([])
         income = flowarray(self.income, incomerate, self.incomehorizon)
-        consumption = flowarray(self.consumption, theta(discountrate, wealthrate, self.risktolerance), self.consumptionhorizon)
+        consumption = flowarray(self.consumption, theta(self.discountrate, wealthrate, self.risktolerance), self.consumptionhorizon)
         value = assetarray(self.value, valuerate, self.consumptionhorizon)
         mortgagepayments = payarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])
         studentloanpayments = payarray(self.studentloan.balance, self.studentloan.rate, self.studentloan.duration) if self.studentloan else np.array([])       
@@ -159,7 +169,10 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         downpayment = bank.downpayment(value)
         closingcost = bank.cost(value - downpayment)
         wealth = self.wealth - downpayment - closingcost
-        mortgage = bank.loan(value - downpayment)            
+        if wealth < 0: raise InsufficentFundError()
+        mortgage = bank.loan(value - downpayment)       
+        coverage = self.income / (mortgage.payment + self.studentloan.payment)
+        if coverage < bank.coverage: raise InsufficentCoverageError()
         assets = dict(wealth=wealth, value=value)
         flows = dict(income=self.income, consumption=self.consumption)
         loans = dict(mortgage=mortgage, studentloan=self.studentloan)

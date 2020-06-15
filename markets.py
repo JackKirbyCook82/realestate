@@ -6,9 +6,13 @@ Created on Mon May 18 2020
 
 """
 
+import numpy as np
+
+from realestate.finance import InsufficientFundError, InsufficientCoverageError, UnsolventLifeStyleError
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Investment_Property_Market', 'Rental_Property_Market', 'Owner_Property_Market']
+__all__ = ['Investment_Property_Market', 'Owner_Property_Market', 'Rental_Property_Market']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -26,7 +30,15 @@ class Rental_Property_Market(object):
         assert isinstance(households, list) and isinstance(housings, list)
         self.__households, self.__housings = households, housings
 
-
+    def utility_matrix(self, *args, **kwargs):
+        utilitymatrix = np.empty((len(self.__housing), len(self.__households)))
+        for i, housing in enumerate(self.__housing):
+            for j, household in enumerate(self.__households):
+                try: utilitymatrix[i, j] = household(housing, *args, tenure='renter', **kwargs)
+                except InsufficientFundError: pass
+                except InsufficientCoverageError: pass
+                except UnsolventLifeStyleError: pass
+        return utilitymatrix
 
 
 

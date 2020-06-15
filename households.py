@@ -6,7 +6,10 @@ Created on Sun Feb 23 2020
 
 """
 
+import numpy as np
 from collections import namedtuple as ntuple
+
+from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
 from realestate.finance import Financials
 from realestate.utility import UtilityFunction
@@ -74,23 +77,25 @@ class Household(ntuple('Household', 'date age race language education children s
         try: self.__count = self.__count + count
         except AttributeError: self.__count = count
 
-#    def __call__(self, housing, *args, economy, **kwargs):
-#        rentercost = housing.rentercost 
-#        ownercost = housing.ownercost + self.financials.mortgage.payment
-#        spending = self.financials.consumption - 
-#        spending_expenditure = self.spending(tenure, *args, **kwargs)
-#        factor = np.prod(np.array([economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
-#        spending_expenditure_valuation = spending_expenditure * factor * economy.purchasingpower
-#        return {'spending':spending_expenditure_valuation}     
-#    @keydispatcher
-#    def spending(self, tenure, *args, **kwargs): raise KeyError(tenure)
-#    @spending.register('rent')
-#    def spendingAsRenter(*args, housing, household, **kwargs):
-#        return household.financials.consumption - 
-#    @spending.register('own')
-#    def spendingAsOwner(*args, housing, household, **kwargs):
-#        return household.financials.consumption -                  
-#        return self.utility(*args, tenure=tenure, housing=housing, household=self, **kwargs)
+    def __call__(self, housing, *args, tenure, economy, **kwargs):
+        spending = self.evaluate(tenure, housing, *args, **kwargs)
+        factor = np.prod(np.array([economy.inflationrate(i, units='year') for i in range(economy.date.year, self.date.year)]))
+        consumption = spending * factor * economy.purchasingpower    
+        return self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
+    
+    @keydispatcher
+    def evaluate(self, tenure, housing, *args, **kwargs): raise KeyError(tenure) 
+    @evaluate.register('renter')
+    def evaluate_renter(self, housing, *args, **kwargs):
+        newfinancials = self.financials.sale(*args, **kwargs)    
+        housingcost = housing.rentercost
+        return newfinancials.consumption - housingcost  
+    @evaluate.register('owner')
+    def evaluate_owner(self, housing, *args, **kwargs):
+        newfinancials = self.financials.sale(*args, **kwargs)
+        newfinancials = newfinancials.purchase(housing.price, *args, **kwargs)
+        housingcost = housing.ownercost + newfinancials.mortgage.payment
+        return newfinancials.consumption - housingcost
     
     @property
     def key(self): return hash(createHouseholdKey(**self.todict(), variables=self.__variables))   

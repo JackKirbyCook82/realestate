@@ -32,7 +32,7 @@ class Consumption_UtilityIndex:
 class Housing_UtilityIndex: 
     @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
-    def execute(self, *args, housing, household, date, **kwargs): 
+    def execute(self, *args, housing, household, **kwargs): 
         return {'sqft':housing.space.sqft, 'yearbuilt':housing.quality.yearbuilt}
     
 
@@ -68,8 +68,8 @@ class School_UtilityIndex:
 class Quality_UtilityIndex: 
     @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
-    def execute(self, *args, housing, household, date, **kwargs): 
-        return {'age':date.year - housing.quality.yearbuilt + 1}
+    def execute(self, *args, housing, household, **kwargs): 
+        return {'age':household.date.year - housing.quality.yearbuilt + 1}
 
 
 @UtilityIndex.register('space', 'logarithm', parameters=('bed/ppl', 'sqft/ppl', 'sqft', 'sqft/bedroom', 'unit',))

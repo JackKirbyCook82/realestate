@@ -11,7 +11,7 @@ from collections import namedtuple as ntuple
 
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
-from realestate.finance import Financials
+from realestate.finance import Financials, UnstableLifeStyleError
 from realestate.utility import UtilityFunction
 
 __version__ = "1.0.0"
@@ -23,6 +23,7 @@ __license__ = ""
 
 class PrematureHouseholderError(Exception): pass
 class DeceasedHouseholderError(Exception): pass
+class NegativeUtilityError(Exception): pass
 
 
 def createHouseholdKey(*args, date, financials, utility, variables, **kwargs):
@@ -79,9 +80,12 @@ class Household(ntuple('Household', 'date age race language education children s
 
     def __call__(self, housing, *args, tenure, economy, **kwargs):
         spending = self.evaluate(tenure, housing, *args, **kwargs)
-        factor = np.prod(np.array([economy.inflationrate(i, units='year') for i in range(economy.date.year, self.date.year)]))
-        consumption = spending * factor * economy.purchasingpower    
-        return self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
+        factor = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, self.date.year)]))
+        consumption = spending * factor * economy.purchasingpower   
+        if consumption <= 0: raise UnstableLifeStyleError()
+        utility = self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
+        if utility < 0: raise NegativeUtilityError()
+        return utility
     
     @keydispatcher
     def evaluate(self, tenure, housing, *args, **kwargs): raise KeyError(tenure) 
@@ -111,11 +115,12 @@ class Household(ntuple('Household', 'date age race language education children s
         else: raise TypeError(type(item))
 
     @classmethod
-    def create(cls, *args, date, household={}, financials={}, **kwargs):
+    def create(cls, *args, date, household={}, financials={}, economy, **kwargs):
         assert isinstance(household, dict) and isinstance(financials, dict)
+        rates = dict(wealthrate=economy.wealthrate(date, units='month'), incomerate=economy.incomerate(date, units='month'))
         income_horizon = max((cls.__lifetimes['retirement'] - household['age']) * 12, 0)
         consumption_horizon = max((cls.__lifetimes['death'] - household['age']) * 12, 0)   
-        financials = Financials.create(income_horizon, consumption_horizon, date=date, **financials)
+        financials = Financials.create(income_horizon, consumption_horizon, **financials, **rates)
         utility = UtilityFunction.getfunction(cls.__utility).create(cls.__parameters, **household)
         return cls(*args, date=date, **household, financials=financials, utility=utility, **kwargs)   
 

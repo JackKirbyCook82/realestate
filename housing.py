@@ -8,6 +8,7 @@ Created on Sun Feb 23 2020
 
 from collections import namedtuple as ntuple
 
+from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 from utilities.concepts import concept
 
 __version__ = "1.0.0"
@@ -79,8 +80,23 @@ class Housing(ntuple('Housing', 'geography date concepts')):
             except TypeError: self.__discountrate
             try: self.__rentrate = rentrate(date.year, units='month')
             except TypeError: self.__discountrate              
-             
+       
+    def __call__(self, supplydemandratio, *args, tenure, **kwargs):
+        self.evaluate(tenure, supplydemandratio, *args, **kwargs)
+
+    @keydispatcher
+    def evaluate(self, tenure, supplydemandratio, *args, **kwargs): raise KeyError(tenure) 
+    @evaluate.register('renter')
+    def evaluate_renter(self, supplydemandratio, *args, **kwargs):
+        self.__sqftrent = self.__sqftrent * supplydemandratio
+    @evaluate.register('owner')
+    def evaluate_owner(self, supplydemandratio, *args, **kwargs):
+        self.__sqftprice = self.__sqftprice * supplydemandratio     
+        
     def todict(self): return self._asdict()
+    def __getattr__(self, attr):
+        try: return self.concepts[attr]
+        except KeyError: super().__getattr__(attr)
     def __getitem__(self, item): 
         if isinstance(item, (int, slice)): return super().__getitem__(item)
         elif isinstance(item, str): return getattr(self, item)
@@ -122,12 +138,12 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     def rentercost(self): return self.__sqftrent * self.sqft    
   
     @classmethod
-    def create(cls, *args, housing={}, neighborhood={}, **kwargs):         
-        assert isinstance(housing, dict) and isinstance(neighborhood, dict)
+    def create(cls, *args, housing={}, neighborhood={}, prices, **kwargs):         
+        assert isinstance(housing, dict) and isinstance(neighborhood, dict) and isinstance(prices, dict)
         concepts = {parameter:cls.__concepts[parameter]({**housing, **neighborhood}, *args, **kwargs) for parameter in cls.__parameters}
         fields = [field for conceptkey, conceptvalue in concepts.items() for field, value in conceptvalue.todict().items()]
         assert all([field in fields for field in ('unit', 'sqft', 'yearbuilt',)])
-        return cls(*args, **housing, **neighborhood, concepts=concepts, **kwargs)  
+        return cls(*args, **housing, **neighborhood, **prices, concepts=concepts, **kwargs)  
         
 
     

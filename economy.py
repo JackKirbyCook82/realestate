@@ -46,7 +46,7 @@ def createcurve_average(x, y, *args, **kwargs): return _curve(x, y, (np.average(
 def createcurve_last(x, y, *args, **kwargs): return _curve(x, y, (y[np.argmin(x)], y[np.argmax(x)]))   
 
 
-class Economy(ntuple('Economy', 'wealthrate inflationrate incomerate date purchasingpower')):
+class Economy(ntuple('Economy', 'wealthrate incomerate inflationrate date purchasingpower')):
     def __repr__(self):    
         content = {'purchasingpower':self.purchasingpower}
         content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
@@ -60,10 +60,9 @@ class Rate(ntuple('Rate', 'x y basis')):
             try: x, y = np.array([x]), np.array([y]) 
             except: raise TypeError(type(x), type(y))
         return super().__new__(cls, x, y, basis)
-    
-    def __repr__(self): return '{}(x={}, y={}, basis={})'.format(self.__class__.__name__, self.x, self.y, self.basis)
+   
     def __call__(self, x, *args, units, **kwargs): return float(_convertrate(self.basis, units, self.__curve(x)))
-    
+    def __repr__(self): return '{}(x={}, y={}, basis={})'.format(self.__class__.__name__, self.x, self.y, self.basis)
     def __init__(self, *args, extrapolate='average', **kwargs): 
         if len(self.x) > 1: self.__curve = createcurve(extrapolate, self.x, self.y, *args, **kwargs)
         else: self.__curve = lambda x: self.y
@@ -87,16 +86,17 @@ class Loan(ntuple('Loan', 'type balance rate duration')):
         assert isinstance(other, type(self))
         return self.key == other.key
     
-    def __bool__(self): return int(self.balance) > 0    
+    def __bool__(self): return self.balance > 0    
     def __new__(cls, loantype, *args, balance, rate=None, duration=0, basis, **kwargs): 
         rate = _convertrate(basis, 'month', rate) if balance > 0 else 0
         duration = max(int(_convertduration(basis, 'month', duration)), 0)
+        balance = balance if balance else 0
         return super().__new__(cls, loantype, balance, rate, duration)    
 
     @property
     def payment(self): return -np.pmt(self.rate, self.duration, self.balance) if self.balance else 0
-    def __call__(self, horizon):
-        balance = loanvalue(self.balance, self.rate, self.duration, min(horizon, self.duration)) 
+    def projection(self, horizon):
+        balance = loanvalue(self.balance, self.rate, self.duration, min(horizon, self.duration)) if self.balance else 0
         duration = max(self.duration - horizon, 0)
         return self.__class__(self.type, balance=balance, duration=duration, rate=self.rate, basis='month')
 

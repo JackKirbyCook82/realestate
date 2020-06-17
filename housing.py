@@ -6,6 +6,7 @@ Created on Sun Feb 23 2020
 
 """
 
+import numpy as np
 import pandas as pd
 from collections import namedtuple as ntuple
 
@@ -64,6 +65,7 @@ class Housing(ntuple('Housing', 'geography date concepts')):
         except AttributeError: 
             self.__count = count 
             self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost 
+            self.__sqftrenthistory, self.__sqftpricehistory = np.array([sqftrent]), np.array([sqftprice])
             try: self.__valuerate = valuerate(date.year, units='month')
             except TypeError: self.__discountrate
             try: self.__rentrate = rentrate(date.year, units='month')
@@ -77,10 +79,12 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     @evaluate.register('renter')
     def evaluate_renter(self, supplydemandratio, *args, **kwargs): 
         self.__sqftrent = self.__sqftrent * supplydemandratio
+        self.__sqftrenthistory = np.append(self.__sqftrenthistory, self.__sqftrent)
     @evaluate.register('owner')
     def evaluate_owner(self, supplydemandratio, *args, **kwargs):
         self.__sqftprice = self.__sqftprice * supplydemandratio     
-        
+        self.__sqftpricehistory = np.append(self.__sqftpricehistory, self.__sqftprice)
+    
     def todict(self): return self._asdict()
     def __getattr__(self, attr):
         try: return self.concepts[attr]

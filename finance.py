@@ -193,8 +193,9 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         return self.__class__(self.incomehorizon, self.consumptionhorizon, **assets, **flows, **loans, **rates)
 
     @classmethod
-    def create(cls, *args, income, wealth=0, value=0, **kwargs):
-        return cls(*args, income=int(income), consumption=int(income), wealth=wealth, value=value, **kwargs)
+    def create(cls, *args, income, wealth=0, value=0, savingrate, **kwargs):
+        consumption = income * (1 - savingrate(income))
+        return cls(*args, income=int(income), consumption=int(consumption), wealth=wealth, value=value, **kwargs)
         
     
     

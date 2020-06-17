@@ -103,13 +103,14 @@ class Community_UtilityIndex:
         return {'race':race, 'age':age, 'children':children, 'education':education, 'language':language}
   
 
-@UtilityFunction.register('cobbdouglas', 'cobbdouglas',)
+@UtilityFunction.register('simple', 'cobbdouglas', parameters=('consumption', 'housing',))
 class CobbDouglas_UtilityFunction: 
     @classmethod
-    def create(cls, parameters, *args, **kwargs):        
-        assert isinstance(parameters, (tuple, list))
-        indexes = {parameter:UtilityIndex.getfunction(parameter)(*args, **kwargs) for parameter in parameters}
-        return cls(amplitude=1, diminishrate=1, subsistences={}, weights={}, indexes=indexes)
+    def create(cls, *args, housing_income_ratio, poverty_consumption, poverty_housing, **kwargs):        
+        indexes = {parameter:UtilityIndex.getfunction(parameter)(*args, **kwargs) for parameter in cls.parameters}
+        weights = {'consumption':1-housing_income_ratio, 'housing':housing_income_ratio}
+        subsistences = {'consumption':int(poverty_consumption), 'housing':int(poverty_housing)}
+        return cls(amplitude=1, diminishrate=1, subsistences=subsistences, weights=weights, indexes=indexes)
 
 
 

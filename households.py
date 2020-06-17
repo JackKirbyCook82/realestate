@@ -33,7 +33,7 @@ def createHouseholdKey(*args, date, age, race, language, education, children, si
 
 class Household(ntuple('Household', 'date age race language education children size financials utility')):
     __lifetimes = {'adulthood':15, 'retirement':65, 'death':95}  
-    __utility = 'cobbdouglas'
+    __utility = 'simple'
     __parameters = ('spending', 'crime', 'school', 'quality', 'space', 'proximity', 'community',)
     
     @classmethod

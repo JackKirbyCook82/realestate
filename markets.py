@@ -33,20 +33,21 @@ class Investment_Property_Market(object):
 
 
 class Personal_Property_Market(object):
-    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.001, atol=0.001, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.001, atol=0.001, maxcycles=15, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         self.__households, self.__housings = households, housings
         self.__coveraged = lambda x: np.allclose(x, np.ones(x.shape), rtol=rtol, atol=atol) 
         self.__tenure = tenure
+        self.__maxcycles = maxcycles
 
     def equilibrium(self, *args, **kwargs): 
-        utilitymatrix = self.utility_matrix(self.__housings, self.__households, *args, **kwargs)
-        supplydemandmatrix = self.supplydemand_matrix(utilitymatrix, *args, **kwargs)
-        supplydemandratios = self.supplydemand_ratios(supplydemandmatrix, *args, **kwargs)
-        if not self.__coveraged(supplydemandratios): 
-            self.update(supplydemandratios, *args, **kwargs)        
-            self.equilibrium(*args, **kwargs)
+        for cycle in range(self.__maxcycles):
+            utilitymatrix = self.utility_matrix(self.__housings, self.__households, *args, **kwargs)
+            supplydemandmatrix = self.supplydemand_matrix(utilitymatrix, *args, **kwargs)
+            supplydemandratios = self.supplydemand_ratios(supplydemandmatrix, *args, **kwargs)
+            self.update(supplydemandratios, *args, **kwargs)    
+            if self.__coveraged(supplydemandratios): break
 
     def utility_matrix(self, housings, households, *args, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
@@ -86,6 +87,19 @@ class Personal_Property_Market(object):
     def tableHousings(self, *args, **kwargs):
         return pd.concat([housing.toSeries(*args, **kwargs) for housing in self.__housings], axis=1).transpose()
         
+
+
+
+
+
+
+
+
+
+
+
+
+
         
         
         

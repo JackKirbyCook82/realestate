@@ -102,6 +102,8 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     def flows(self): return dict(income=self.income, consumption=self.consumption)
     @property
     def loans(self): return dict(mortgage=self.mortgage, studentloan=self.studentloan) 
+    @property
+    def netwealth(self): return self.wealth - self.mortgage.balance - self.studentloan.balance
     
     def todict(self): return self._asdict()
     def __getitem__(self, item): 
@@ -191,9 +193,8 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         return self.__class__(self.incomehorizon, self.consumptionhorizon, **assets, **flows, **loans, **rates)
 
     @classmethod
-    def create(cls, *args, income, savings, wealth=0, value=0, **kwargs):
-        assert 0 <= savings <= 1
-        return cls(*args, income=int(income/12), consumption=int(income*(1-savings)/12), wealth=wealth, value=value, **kwargs)
+    def create(cls, *args, income, wealth=0, value=0, **kwargs):
+        return cls(*args, income=int(income), consumption=int(income), wealth=wealth, value=value, **kwargs)
         
     
     

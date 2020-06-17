@@ -16,7 +16,7 @@ from utilities.strings import uppercase, dictstring
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Economy', 'Rate', 'Broker', 'Loan', 'Education', 'Bank']
+__all__ = ['Economy', 'Curve', 'Rate', 'Broker', 'Loan', 'Education', 'Bank']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -30,7 +30,7 @@ _convertduration = lambda frombasis, tobasis, duration: duration * _convertfacto
 
 _aslist = lambda items: [items] if isinstance(items, Number) else items
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
-_curve = lambda x, y, fill: interp1d(x, y, kind='linear', bounds_error=False, fill_value=fill) 
+_curve = lambda x, y, method, fill: interp1d(x, y, kind=method, bounds_error=False, fill_value=fill) 
 
 downpayment = lambda x, ltv: x * (1 - ltv)
 financingcost = lambda x, r: x * r
@@ -39,11 +39,11 @@ loanvalue = lambda x, r, n, i: np.fv(r, i, -np.pmt(r, n, x), -x)
 
 
 @keydispatcher
-def createcurve(method, x, y, *args, **kwargs): raise KeyError(method)
+def createcurve(extrapolate, x, y, *args, **kwargs): raise KeyError(extrapolate)
 @createcurve.register('average')
-def createcurve_average(x, y, *args, **kwargs): return _curve(x, y, (np.average(y), np.average(y)))
+def createcurve_average(x, y, *args, method, **kwargs): return _curve(x, y, method, (np.average(y), np.average(y)))
 @createcurve.register('last')
-def createcurve_last(x, y, *args, **kwargs): return _curve(x, y, (y[np.argmin(x)], y[np.argmax(x)]))   
+def createcurve_last(x, y, *args, method, **kwargs): return _curve(x, y, method, (y[np.argmin(x)], y[np.argmax(x)]))   
 
 
 class Economy(ntuple('Economy', 'wealthrate incomerate inflationrate date purchasingpower')):
@@ -53,21 +53,31 @@ class Economy(ntuple('Economy', 'wealthrate incomerate inflationrate date purcha
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
     
 
-class Rate(ntuple('Rate', 'x y basis')):
-    def __new__(cls, x, y, *args, basis, **kwargs):
-        if isinstance(x, np.ndarray) and isinstance(y, np.ndarray): assert x.shape == y.shape
-        else:
-            try: x, y = np.array([x]), np.array([y]) 
-            except: raise TypeError(type(x), type(y))
-        return super().__new__(cls, x, y, basis)
-   
-    def __call__(self, x, *args, units, **kwargs): return float(_convertrate(self.basis, units, self.__curve(x)))
-    def __repr__(self): return '{}(x={}, y={}, basis={})'.format(self.__class__.__name__, self.x, self.y, self.basis)
-    def __init__(self, *args, extrapolate='average', **kwargs): 
-        if len(self.x) > 1: self.__curve = createcurve(extrapolate, self.x, self.y, *args, **kwargs)
-        else: self.__curve = lambda x: self.y
+class Curve(ntuple('Curve', 'x y')):
+    def __repr__(self): return '{}(x={}, y={})'.format(self.__class__.__name__, self.x, self.y)
+    def __new__(cls, x, y, *args, **kwargs):
+        assert hasattr(x, '__iter__') and hasattr(y, '__iter__')
+        if not isinstance(x, np.ndarray): x = np.ndarray([i for i in x])
+        if not isinstance(y, np.ndarray): y = np.ndarray([j for j in y])
+        assert len(x) == len(y) > 1
+        return super().__new__(cls, x, y)
+
+    def __call__(self, x, *args, **kwargs): return self.__curve(x)
+    def __init__(self, *args, extrapolate='average', method='linear', **kwargs): 
+        self.__curve = createcurve(extrapolate, self.x, self.y, *args, method=method, **kwargs)
+        
+    @classmethod
+    def flat(cls, x, y, *args, **kwargs):     
+        return cls(np.array([x-1, x, x+1]), np.array([y, y, y]), *args, **kwargs)
+
+
+class Rate(Curve):
+    def __call__(self, x, *args, units, **kwargs): return float(_convertrate(self.__basis, units, super().__call__(x, *args, **kwargs)))
+    def __init__(self, *args, basis, **kwargs): 
+        self.__basis = basis
+        super().__init__(*args, **kwargs)
             
-    
+
 class Loan(ntuple('Loan', 'type balance rate duration')):
     stringformat = 'Loan|{type} of ${balance:.0f} @ {rate:.3f}%/YR for {duration:.0f}MOS' 
     emptystringformat = 'Loan|{type} of ${balance:.0f}'

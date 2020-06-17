@@ -7,6 +7,7 @@ Created on Sun Feb 23 2020
 """
 
 import numpy as np
+import pandas as pd
 from collections import namedtuple as ntuple
 
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
@@ -26,36 +27,21 @@ class DeceasedHouseholderError(Exception): pass
 class NegativeUtilityError(Exception): pass
 
 
-def createHouseholdKey(*args, date, financials, utility, variables, **kwargs):
-    indexes = []
-    for key in ('age', 'race', 'language', 'education', 'children', 'size',):
-        if key in variables.keys(): indexes.append(variables[key](kwargs[key]).index)
-        else: indexes.append(kwargs[key])
-    return (date.index, *indexes, financials.key, utility.key,)
+def createHouseholdKey(*args, date, age, race, language, education, children, size, financials, utility, **kwargs):
+    return (date.index, age, race, language, education, children, size, financials.key, utility.key,)
 
 
 class Household(ntuple('Household', 'date age race language education children size financials utility')):
     __lifetimes = {'adulthood':15, 'retirement':65, 'death':95}  
     __utility = 'cobbdouglas'
     __parameters = ('spending', 'crime', 'school', 'quality', 'space', 'proximity', 'community',)
-    __variables = dict()
     
     @classmethod
     def customize(cls, *args, **kwargs):
-        cls.__stringformat = kwargs.get('stringformat', cls.__stringformat)
-        cls.__variables = kwargs.get('variables', cls.__variables)
         cls.__lifetimes = kwargs.get('lifetimes', cls.__lifetimes)   
         cls.__utility = kwargs.get('utility', cls.__utility)
         cls.__parameters = kwargs.get('parameters', cls.__parameters)
-    
-    __stringformat = 'Household[{count}]|{race} HH speaking {language} {children}, {age}, {size}, {education} Education'          
-    def __str__(self):  
-        content = {field:getattr(self, field) for field in ('age', 'race', 'language', 'education', 'children', 'size',)}
-        content = {key:self.__variables[key](value) if key in self.__variables.keys() else value for key, value in content.items()}        
-        householdstring = self.__stringformat.format(count=self.count, **content)
-        financialstring = str(self.financials)
-        return '\n'.join([householdstring, financialstring])        
-    
+
     def __repr__(self): 
         content = {'utility':repr(self.utility), 'financials':repr(self.financials)}
         content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
@@ -67,7 +53,7 @@ class Household(ntuple('Household', 'date age race language education children s
     def __new__(cls, *args, **kwargs):
         if kwargs['age'] < cls.__lifetimes['adulthood']: raise PrematureHouseholderError()
         if kwargs['age'] > cls.__lifetimes['death']: raise DeceasedHouseholderError()              
-        key = hash(createHouseholdKey(*args, **kwargs, variables=cls.__variables))
+        key = hash(createHouseholdKey(*args, **kwargs))
         try: return cls.__instances[key]
         except KeyError: 
             newinstance = super().__new__(cls, **{field:kwargs[field] for field in cls._fields})
@@ -102,7 +88,7 @@ class Household(ntuple('Household', 'date age race language education children s
         return newfinancials.consumption - housingcost
     
     @property
-    def key(self): return hash(createHouseholdKey(**self.todict(), variables=self.__variables))   
+    def key(self): return hash(createHouseholdKey(**self.todict()))   
     def __ne__(self, other): return not self.__eq__(other)
     def __eq__(self, other): 
         assert isinstance(other, type(self))
@@ -114,10 +100,15 @@ class Household(ntuple('Household', 'date age race language education children s
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
 
+    def toSeries(self, *args, **kwargs):
+        content = {'count':self.count, 'age':self.age, 'race':self.race, 'education':self.education}
+        content.update({'income':self.financials.income, 'consumption':self.financials.consumption, 'netwealth':self.financials.netwealth})
+        return pd.Series(content)
+
     @classmethod
     def create(cls, *args, date, household={}, financials={}, economy, **kwargs):
         assert isinstance(household, dict) and isinstance(financials, dict)
-        rates = dict(wealthrate=economy.wealthrate(date, units='month'), incomerate=economy.incomerate(date, units='month'))
+        rates = dict(wealthrate=economy.wealthrate(date.year, units='month'), incomerate=economy.incomerate(date.year, units='month'))
         income_horizon = max((cls.__lifetimes['retirement'] - household['age']) * 12, 0)
         consumption_horizon = max((cls.__lifetimes['death'] - household['age']) * 12, 0)   
         financials = Financials.create(income_horizon, consumption_horizon, **financials, **rates)

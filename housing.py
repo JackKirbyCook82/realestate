@@ -6,6 +6,7 @@ Created on Sun Feb 23 2020
 
 """
 
+import pandas as pd
 from collections import namedtuple as ntuple
 
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
@@ -18,13 +19,9 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousingKey(*args, geography, date, concepts={}, variables={}, **kwargs):
-    indexes = []
-    for conceptkey, conceptvalue in concepts.items():
-        for field, value in conceptvalue.todict().items():
-            if field in variables.keys(): indexes.append(variables[field](value).index)
-            else: indexes.append(value)
-    return (geography.index, date.index, *indexes)
+def createHousingKey(*args, geography, date, concepts={}, **kwargs):
+    indexes = [value for conceptkey, conceptvalue in concepts.items() for field, value in conceptvalue.todict().items()]
+    return (geography.index, date.index, *indexes)        
 
 
 Crime = concept('crime', ['incomelevel', 'race', 'education', 'unit'])
@@ -38,22 +35,13 @@ Quality = concept('quality', ['yearbuilt'])
 class Housing(ntuple('Housing', 'geography date concepts')):
     __concepts = dict(space=Space, quality=Quality, crime=Crime, school=School, community=Community, proximity=Proximity)
     __parameters = ('space', 'quality', 'crime', 'school', 'community', 'proximity',)
-    __variables = dict()
 
     @classmethod
     def customize(cls, *args, **kwargs):
         try: cls.__concepts.update(kwargs['concepts'])
-        except KeyError: pass
-        cls.__stringformat = kwargs.get('stringformat', cls.__stringformat)
-        cls.__variables = kwargs.get('variables', cls.__variables)    
+        except KeyError: pass  
         cls.__parameters = kwargs.get('parameters', cls.__parameters)
-    
-    __stringformat = 'Housing[{count}]|{unit} w/ {sqft} in {geography} builtin {yearbuilt} \nPricing|${rent:.0f}/MO Rent, ${price:.0f} Purchase, ${cost:.0f}/MO Cost'           
-    def __str__(self): 
-        content = {field:getattr(self, field) for field in ('unit', 'sqft', 'yearbuilt',)}
-        content = {key:self.__variables[key](value) if key in self.__variables.keys() else value for key, value in content.items()}
-        return self.__stringformat.format(count=self.count, geography=str(self.geography), rent=self.rentercost, price=self.price, cost=self.ownercost, **content)  
-    
+
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography)} 
         content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice), 'sqftcost':str(self.__sqftcost)})
@@ -64,7 +52,7 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     @property
     def count(self): return self.__count
     def __new__(cls, *args, geography, date, concepts, **kwargs):   
-        key = hash(createHousingKey(geography=geography, date=date, concepts=concepts, variables=cls.__variables))
+        key = hash(createHousingKey(geography=geography, date=date, concepts=concepts))
         try: return cls.__instances[key]
         except KeyError:
             newinstance = super().__new__(cls, geography=geography, date=date, concepts=concepts)
@@ -87,7 +75,7 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     @keydispatcher
     def evaluate(self, tenure, supplydemandratio, *args, **kwargs): raise KeyError(tenure) 
     @evaluate.register('renter')
-    def evaluate_renter(self, supplydemandratio, *args, **kwargs):
+    def evaluate_renter(self, supplydemandratio, *args, **kwargs): 
         self.__sqftrent = self.__sqftrent * supplydemandratio
     @evaluate.register('owner')
     def evaluate_owner(self, supplydemandratio, *args, **kwargs):
@@ -101,9 +89,9 @@ class Housing(ntuple('Housing', 'geography date concepts')):
         if isinstance(item, (int, slice)): return super().__getitem__(item)
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
-
+ 
     @property
-    def key(self): return hash(createHousingKey(**self.todict(), variables=self.__variables))    
+    def key(self): return hash(createHousingKey(**self.todict()))   
     def __ne__(self, other): return not self.__eq__(other)
     def __eq__(self, other): 
         assert isinstance(other, type(self))
@@ -136,7 +124,12 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     def ownercost(self): return self.__sqftcost * self.sqft    
     @property
     def rentercost(self): return self.__sqftrent * self.sqft    
-  
+
+    def toSeries(self, *args, **kwargs):
+        content = {'count':self.count, 'geography':self.geography.geoID, 'unit':self.unit, 'sqft':self.sqft, 'yearbuilt':self.yearbuilt}
+        content.update({'sqftprice':self.__sqftprice, 'sqftrent':self.__sqftrent})
+        return pd.Series(content)
+    
     @classmethod
     def create(cls, *args, housing={}, neighborhood={}, prices, **kwargs):         
         assert isinstance(housing, dict) and isinstance(neighborhood, dict) and isinstance(prices, dict)

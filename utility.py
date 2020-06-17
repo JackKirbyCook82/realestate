@@ -28,12 +28,12 @@ class Consumption_UtilityIndex:
         return {'consumption':consumption}
         
 
-@UtilityIndex.register('housing', 'additive', parameters=('sqft', 'yearbuilt',))
+@UtilityIndex.register('housing', 'additive', parameters=('yearbuilt',))
 class Housing_UtilityIndex: 
     @classmethod
     def create(cls, *args, **kwargs): return cls(*args, amplitude=1, tolerances={}, **kwargs)    
     def execute(self, *args, housing, household, **kwargs): 
-        return {'sqft':housing.space.sqft, 'yearbuilt':housing.quality.yearbuilt}
+        return {'yearbuilt':housing.quality.yearbuilt}
     
 
 @UtilityIndex.register('crime', 'rtangent', parameters=('poverty', 'nonliving', 'race', 'education', 'nonstructure', 'trailerpark',))
@@ -103,13 +103,13 @@ class Community_UtilityIndex:
         return {'race':race, 'age':age, 'children':children, 'education':education, 'language':language}
   
 
-@UtilityFunction.register('cobbdouglas', 'cobbdouglas', coefficents=('elasticity',))
+@UtilityFunction.register('cobbdouglas', 'cobbdouglas',)
 class CobbDouglas_UtilityFunction: 
     @classmethod
     def create(cls, parameters, *args, **kwargs):        
         assert isinstance(parameters, (tuple, list))
         indexes = {parameter:UtilityIndex.getfunction(parameter)(*args, **kwargs) for parameter in parameters}
-        return cls(amplitude=1, diminishrate=1, elasticity=1, subsistences={}, weights={}, indexes=indexes)
+        return cls(amplitude=1, diminishrate=1, subsistences={}, weights={}, indexes=indexes)
 
 
 

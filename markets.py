@@ -7,6 +7,9 @@ Created on Mon May 18 2020
 """
 
 import numpy as np
+import pandas as pd
+
+from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
 from realestate.finance import InsufficientFundError, InsufficientCoverageError, UnsolventLifeStyleError, UnstableLifeStyleError
 
@@ -30,23 +33,27 @@ class Investment_Property_Market(object):
 
 
 class Personal_Property_Market(object):
-    def __init__(self, tenure, *args, households=[], housings=[], **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.001, atol=0.001, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         self.__households, self.__housings = households, housings
+        self.__coveraged = lambda x: np.allclose(x, np.ones(x.shape), rtol=rtol, atol=atol) 
         self.__tenure = tenure
 
-    def __call__(self, *args, **kwargs):
-        utilitymatrix = self.utility_matrix(*args, **kwargs)
+    def equilibrium(self, *args, **kwargs): 
+        utilitymatrix = self.utility_matrix(self.__housings, self.__households, *args, **kwargs)
         supplydemandmatrix = self.supplydemand_matrix(utilitymatrix, *args, **kwargs)
         supplydemandratios = self.supplydemand_ratios(supplydemandmatrix, *args, **kwargs)
-        self.__housings = self.update(supplydemandratios)
+        if not self.__coveraged(supplydemandratios): 
+            self.update(supplydemandratios, *args, **kwargs)        
+            self.equilibrium(*args, **kwargs)
 
-    def utility_matrix(self, *args, **kwargs):
-        utilitymatrix = np.empty((len(self.__housings), len(self.__households)))
+    def utility_matrix(self, housings, households, *args, **kwargs):
+        assert isinstance(households, list) and isinstance(housings, list)
+        utilitymatrix = np.empty((len(housings), len(households)))
         utilitymatrix[:] = np.NaN
-        for i, housing in enumerate(self.__housings):
-            for j, household in enumerate(self.__households):
+        for i, housing in enumerate(housings):
+            for j, household in enumerate(households):
                 try: utilitymatrix[i, j] = household(housing, *args, tenure=self.__tenure, **kwargs)
                 except InsufficientFundError: pass
                 except InsufficientCoverageError: pass
@@ -66,25 +73,18 @@ class Personal_Property_Market(object):
         return supplydemandratios
     
     def update(self, supplydemandratios, *args, **kwargs):
-        housings = []
         assert len(supplydemandratios) == len(self.__housings)
         for supplydemandratio, housing in zip(supplydemandratios, self.__housings):
-            housings.append(housing(supplydemandratio, *args, tenure=self.__tenure, **kwargs))
-        return housing
+            housing(supplydemandratio, *args, tenure=self.__tenure, **kwargs)
         
-
-
-
-
-
-
-        
-        
-        
-        
-        
-        
-        
+    @keydispatcher
+    def table(self, key, *args, **kwargs): raise KeyError(key)
+    @table.register('household', 'households')
+    def tableHouseholds(self, *args, **kwargs):
+        return pd.concat([household.toSeries(*args, **kwargs) for household in self.__households], axis=1).transpose()
+    @table.register('housing', 'housings')
+    def tableHousings(self, *args, **kwargs):
+        return pd.concat([housing.toSeries(*args, **kwargs) for housing in self.__housings], axis=1).transpose()
         
         
         

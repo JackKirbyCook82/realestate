@@ -83,7 +83,7 @@ class Household(ntuple('Household', 'date age race language education children s
     @evaluate.register('owner')
     def evaluate_owner(self, housing, *args, **kwargs):
         newfinancials = self.financials.sale(*args, **kwargs)
-        newfinancials = newfinancials.purchase(housing.price, *args, **kwargs)
+        newfinancials = newfinancials.purchase(housing.purchaseprice, *args, **kwargs)
         housingcost = housing.ownercost + newfinancials.mortgage.payment
         return newfinancials.consumption - housingcost
     
@@ -103,7 +103,8 @@ class Household(ntuple('Household', 'date age race language education children s
     def toSeries(self, *args, **kwargs):
         content = {'count':self.count, 'age':self.age, 'race':self.race, 'education':self.education}
         content.update({'income':self.financials.income, 'consumption':self.financials.consumption, 'netwealth':self.financials.netwealth})
-        return pd.Series(content)
+        series = pd.Series(content)
+        return series
 
     @classmethod
     def create(cls, *args, date, household={}, financials={}, economy, **kwargs):
@@ -116,6 +117,20 @@ class Household(ntuple('Household', 'date age race language education children s
         return cls(*args, date=date, **household, financials=financials, utility=utility, **kwargs)   
 
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     
     

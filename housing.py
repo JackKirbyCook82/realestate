@@ -66,23 +66,22 @@ class Housing(ntuple('Housing', 'geography date concepts')):
             self.__count = count 
             self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost 
             self.__sqftrenthistory, self.__sqftpricehistory = np.array([sqftrent]), np.array([sqftprice])
-            try: self.__valuerate = valuerate(date.year, units='month')
-            except TypeError: self.__discountrate
-            try: self.__rentrate = rentrate(date.year, units='month')
-            except TypeError: self.__discountrate              
-       
-    def __call__(self, supplydemandratio, *args, tenure, **kwargs):
-        self.evaluate(tenure, supplydemandratio, *args, **kwargs)
+            self.__valuerate = valuerate(date.year, units='month')
+            self.__rentrate = rentrate(date.year, units='month')           
+    
+        
+    def __call__(self, priceadjustment, *args, tenure, **kwargs):
+        self.evaluate(tenure, priceadjustment, *args, **kwargs)
 
     @keydispatcher
-    def evaluate(self, tenure, supplydemandratio, *args, **kwargs): raise KeyError(tenure) 
+    def evaluate(self, tenure, priceadjustment, *args, **kwargs): raise KeyError(tenure) 
     @evaluate.register('renter')
-    def evaluate_renter(self, supplydemandratio, *args, **kwargs): 
-        self.__sqftrent = self.__sqftrent * supplydemandratio
+    def evaluate_renter(self, priceadjustment, *args, **kwargs): 
+        self.__sqftrent = self.__sqftrent + priceadjustment
         self.__sqftrenthistory = np.append(self.__sqftrenthistory, self.__sqftrent)
     @evaluate.register('owner')
-    def evaluate_owner(self, supplydemandratio, *args, **kwargs):
-        self.__sqftprice = self.__sqftprice * supplydemandratio     
+    def evaluate_owner(self, priceadjustment, *args, **kwargs):
+        self.__sqftprice = self.__sqftprice + priceadjustment     
         self.__sqftpricehistory = np.append(self.__sqftpricehistory, self.__sqftprice)
     
     def todict(self): return self._asdict()
@@ -112,28 +111,34 @@ class Housing(ntuple('Housing', 'geography date concepts')):
             try: return getattr(conceptvalue, field)
             except AttributeError: pass
         raise KeyError(field)    
-    
-    @property
-    def rates(self): return dict(valuerate=self.valuerate, rentrate=self.rentrate)    
+     
     @property
     def valuerate(self): return self.__valuerate
     @property
     def rentrate(self): return self.__rentrate    
     
     @property
-    def prices(self): return dict(sqftrent=self.__sqftrent, sqftprice=self.__sqftprice, sqftcost=self.__sqftcost)
-    @property
-    def price(self): return self.__sqftprice * self.sqft      
+    def purchaseprice(self): return self.__sqftprice * self.sqft      
     @property
     def ownercost(self): return self.__sqftcost * self.sqft    
     @property
     def rentercost(self): return self.__sqftrent * self.sqft    
 
+    @keydispatcher
+    def price(self, tenure): raise KeyError(tenure)
+    @price.register('renter', 'rent')
+    def priceRenter(self): return self.__sqftrent
+    @price.register('owner', 'own')
+    def priceOwner(self): return self.__sqftprice
+    @price.register('cost')
+    def priceCost(self): return self.__sqftcost   
+
     def toSeries(self, *args, **kwargs):
         content = {'count':self.count, 'geography':self.geography.geoID, 'unit':self.unit, 'sqft':self.sqft, 'yearbuilt':self.yearbuilt}
         content.update({'sqftprice':self.__sqftprice, 'sqftrent':self.__sqftrent})
-        return pd.Series(content)
-    
+        series = pd.Series(content)
+        return series
+      
     @classmethod
     def create(cls, *args, housing={}, neighborhood={}, prices, **kwargs):         
         assert isinstance(housing, dict) and isinstance(neighborhood, dict) and isinstance(prices, dict)
@@ -143,6 +148,7 @@ class Housing(ntuple('Housing', 'geography date concepts')):
         return cls(*args, **housing, **neighborhood, **prices, concepts=concepts, **kwargs)  
         
 
+    
     
     
     

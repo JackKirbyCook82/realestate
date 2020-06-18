@@ -8,8 +8,11 @@ Created on Mon May 18 2020
 
 import numpy as np
 import pandas as pd
+import math
 
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
+from utilities.strings import uppercase
+from utilities.utility import BelowSubsistenceError
 
 from realestate.finance import InsufficientFundError, InsufficientCoverageError, UnsolventLifeStyleError, UnstableLifeStyleError
 
@@ -33,22 +36,25 @@ class Investment_Property_Market(object):
 
 
 class Personal_Property_Market(object):
-    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.001, atol=0.001, maxcycles=15, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.01, atol=0.01, maxsteps=250, pricestep=1, relaxstep=10, relaxrate=0.1, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
+        self.__coveraged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings = households, housings
-        self.__coveraged = lambda x: np.allclose(x, np.ones(x.shape), rtol=rtol, atol=atol) 
+        self.__prices = np.array([[housing.price(tenure) for housing in housings]])
+        self.__pricestep = lambda step: pricestep * ((1 - relaxrate) ** math.floor(step / relaxstep))
+        self.__maxsteps = maxsteps
         self.__tenure = tenure
-        self.__maxcycles = maxcycles
-
-    def equilibrium(self, *args, **kwargs): 
-        for cycle in range(self.__maxcycles):
+        
+    def __call__(self, *args, **kwargs): 
+        for step in range(self.__maxsteps):
             utilitymatrix = self.utility_matrix(self.__housings, self.__households, *args, **kwargs)
-            supplydemandmatrix = self.supplydemand_matrix(utilitymatrix, *args, **kwargs)
-            supplydemandratios = self.supplydemand_ratios(supplydemandmatrix, *args, **kwargs)
-            self.update(supplydemandratios, *args, **kwargs)    
-            if self.__coveraged(supplydemandratios): break
-
+            supplydemandbalances = self.supplydemand_balances(utilitymatrix, *args, **kwargs)
+            if self.__coveraged(supplydemandbalances): break
+            priceadjustments = self.price_adjustments(supplydemandbalances, *args, **kwargs) * self.__pricestep(step)
+            for priceadjustment, housing in zip(priceadjustments, self.__housings): housing(priceadjustment, *args, tenure=self.__tenure, **kwargs) 
+            self.__prices = np.concatenate([self.__prices, np.array([[housing.price(self.__tenure) for housing in self.__housings]])], axis=0)
+                            
     def utility_matrix(self, housings, households, *args, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         utilitymatrix = np.empty((len(housings), len(households)))
@@ -60,40 +66,45 @@ class Personal_Property_Market(object):
                 except InsufficientCoverageError: pass
                 except UnsolventLifeStyleError: pass
                 except UnstableLifeStyleError: pass
+                except BelowSubsistenceError: pass
         return utilitymatrix
 
-    def supplydemand_matrix(self, utilitymatrix, *args, **kwargs):
-        supplydemandmatrix = np.apply_along_axis(_normalize, 0, utilitymatrix)
-        return supplydemandmatrix
-             
-    def supplydemand_ratios(self, supplydemandmatrix, *args, **kwargs):
+    def supplydemand_balances(self, utilitymatrix, *args, **kwargs):
         householdcounts = [household.count for household in self.__households]
         housingcounts = [housing.count for housing in self.__housings]    
-        supplydemandmatrix = supplydemandmatrix * householdcounts
-        supplydemandratios = np.nansum(supplydemandmatrix, axis=1) / housingcounts           
-        return supplydemandratios
+        supplydemandmatrix = np.apply_along_axis(_normalize, 0, utilitymatrix)
+        supplydemandbalances = (np.nansum(supplydemandmatrix * householdcounts, axis=1) - housingcounts) / housingcounts           
+        return supplydemandbalances
     
-    def update(self, supplydemandratios, *args, **kwargs):
-        assert len(supplydemandratios) == len(self.__housings)
-        for supplydemandratio, housing in zip(supplydemandratios, self.__housings):
-            housing(supplydemandratio, *args, tenure=self.__tenure, **kwargs)
-        
+    def price_adjustments(self, supplydemandbalances, *args, **kwargs):
+        assert len(self.__housings) == len(supplydemandbalances)
+        prices = np.array([housing.sqftprice(self.__tenure, *args, **kwargs) for housing in self.__housings])
+        priceadjustments = prices * supplydemandbalances
+        return priceadjustments
+    
     @keydispatcher
     def table(self, key, *args, **kwargs): raise KeyError(key)
+
     @table.register('household', 'households')
     def tableHouseholds(self, *args, **kwargs):
-        return pd.concat([household.toSeries(*args, **kwargs) for household in self.__households], axis=1).transpose()
+        dataframe = pd.concat([household.toSeries(*args, **kwargs) for household in self.__households], axis=1).transpose()
+        dataframe.columns = [uppercase(column) for column in dataframe.columns]
+        dataframe.index.name = 'Households'
+        return dataframe
+
     @table.register('housing', 'housings')
     def tableHousings(self, *args, **kwargs):
-        return pd.concat([housing.toSeries(*args, **kwargs) for housing in self.__housings], axis=1).transpose()
-        
-
-
-
-
-
-
-
+        dataframe = pd.concat([housing.toSeries(*args, **kwargs) for housing in self.__housings], axis=1).transpose()
+        dataframe.columns = [uppercase(column) for column in dataframe.columns]
+        dataframe.index.name = 'Housing'
+        return dataframe
+    
+    @table.register('price', 'prices')
+    def tablePrices(self, *args, tenure, **kwargs):
+        dataframe = pd.DataFrame(self.__prices)
+        dataframe.columns.name = 'Housing'
+        dataframe.index.name = 'Step'
+        return dataframe
 
 
 

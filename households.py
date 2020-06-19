@@ -11,6 +11,7 @@ import pandas as pd
 from collections import namedtuple as ntuple
 
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
+from utilities.strings import uppercase
 
 from realestate.finance import Financials, UnstableLifeStyleError
 from realestate.utility import UtilityFunction
@@ -100,7 +101,7 @@ class Household(ntuple('Household', 'date age race language education children s
         elif isinstance(item, str): return getattr(self, item)
         else: raise TypeError(type(item))
 
-    def toSeries(self, *args, **kwargs):
+    def toSeries(self):
         content = {'count':self.count, 'age':self.age, 'race':self.race, 'education':self.education}
         content.update({'income':self.financials.income, 'consumption':self.financials.consumption, 'netwealth':self.financials.netwealth})
         series = pd.Series(content)
@@ -116,7 +117,12 @@ class Household(ntuple('Household', 'date age race language education children s
         utility = UtilityFunction.getfunction(cls.__utility).create(cls.__parameters, **household)
         return cls(*args, date=date, **household, financials=financials, utility=utility, **kwargs)   
 
-
+    @classmethod
+    def table(cls):
+        dataframe = pd.concat([household.toSeries() for household in cls.__instances.values()], axis=1).transpose()
+        dataframe.columns = [uppercase(column) for column in dataframe.columns]
+        dataframe.index.name = 'Households'
+        return dataframe
     
     
     

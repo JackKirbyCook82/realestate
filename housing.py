@@ -11,6 +11,7 @@ import pandas as pd
 from collections import namedtuple as ntuple
 
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
+from utilities.strings import uppercase
 from utilities.concepts import concept
 
 __version__ = "1.0.0"
@@ -36,6 +37,8 @@ Quality = concept('quality', ['yearbuilt'])
 class Housing(ntuple('Housing', 'geography date concepts')):
     __concepts = dict(space=Space, quality=Quality, crime=Crime, school=School, community=Community, proximity=Proximity)
     __parameters = ('space', 'quality', 'crime', 'school', 'community', 'proximity',)
+    __minsqftprice = 0.0001
+    __minsqftrent = 0.0001
 
     @classmethod
     def customize(cls, *args, **kwargs):
@@ -62,7 +65,7 @@ class Housing(ntuple('Housing', 'geography date concepts')):
 
     def __init__(self, *args, count=1, sqftprice, sqftrent, sqftcost, rentrate, valuerate, date, **kwargs): 
         try: self.__count = self.__count + count
-        except AttributeError: 
+        except (AttributeError, KeyError): 
             self.__count = count 
             self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost 
             self.__sqftrenthistory, self.__sqftpricehistory = np.array([sqftrent]), np.array([sqftprice])
@@ -77,17 +80,15 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     def evaluate(self, tenure, priceadjustment, *args, **kwargs): raise KeyError(tenure) 
     @evaluate.register('renter')
     def evaluate_renter(self, priceadjustment, *args, **kwargs): 
-        self.__sqftrent = self.__sqftrent + priceadjustment
+        self.__sqftrent = max(self.__sqftrent + priceadjustment, self.__minsqftrent)
         self.__sqftrenthistory = np.append(self.__sqftrenthistory, self.__sqftrent)
     @evaluate.register('owner')
     def evaluate_owner(self, priceadjustment, *args, **kwargs):
-        self.__sqftprice = self.__sqftprice + priceadjustment     
+        self.__sqftprice = max(self.__sqftprice + priceadjustment, self.__minsqftprice)     
         self.__sqftpricehistory = np.append(self.__sqftpricehistory, self.__sqftprice)
     
     def todict(self): return self._asdict()
-    def __getattr__(self, attr):
-        try: return self.concepts[attr]
-        except KeyError: super().__getattr__(attr)
+    def __getattr__(self, attr): return self.concepts[attr]
     def __getitem__(self, item): 
         if isinstance(item, (int, slice)): return super().__getitem__(item)
         elif isinstance(item, str): return getattr(self, item)
@@ -133,7 +134,7 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     @price.register('cost')
     def priceCost(self): return self.__sqftcost   
 
-    def toSeries(self, *args, **kwargs):
+    def toSeries(self):
         content = {'count':self.count, 'geography':self.geography.geoID, 'unit':self.unit, 'sqft':self.sqft, 'yearbuilt':self.yearbuilt}
         content.update({'sqftprice':self.__sqftprice, 'sqftrent':self.__sqftrent})
         series = pd.Series(content)
@@ -147,7 +148,12 @@ class Housing(ntuple('Housing', 'geography date concepts')):
         assert all([field in fields for field in ('unit', 'sqft', 'yearbuilt',)])
         return cls(*args, **housing, **neighborhood, **prices, concepts=concepts, **kwargs)  
         
-
+    @classmethod 
+    def table(cls):
+        dataframe = pd.concat([housing.toSeries() for housing in cls.__instances.values()], axis=1).transpose()
+        dataframe.columns = [uppercase(column) for column in dataframe.columns]
+        dataframe.index.name = 'Households'
+        return dataframe
     
     
     

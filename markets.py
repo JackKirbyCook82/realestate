@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import math
 
-from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 from utilities.strings import uppercase
 from utilities.utility import BelowSubsistenceError
 
@@ -49,13 +48,16 @@ class Personal_Property_Market(object):
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):
             utilitymatrix = self.utility_matrix(self.__housings, self.__households, *args, **kwargs)
-            supplydemandbalances = self.supplydemand_balances(utilitymatrix, *args, **kwargs)
+            supplydemandmatrix = self.supplydemand_matrix(utilitymatrix, *args, **kwargs)
+            supplydemandbalances = self.supplydemand_balances(supplydemandmatrix, *args, **kwargs)
             if self.__coveraged(supplydemandbalances): break
             priceadjustments = self.price_adjustments(supplydemandbalances, *args, **kwargs) * self.__pricestep(step)
             for priceadjustment, housing in zip(priceadjustments, self.__housings): housing(priceadjustment, *args, tenure=self.__tenure, **kwargs) 
             self.__prices = np.concatenate([self.__prices, np.array([[housing.price(self.__tenure) for housing in self.__housings]])], axis=0)
-                            
-    def utility_matrix(self, housings, households, *args, **kwargs):
+                 
+    def utility_matrix(self, *args, **kwargs):
+        try: housings, households = args.pop(0), args.pop(1)
+        except: housings, households = self.__housings, self.__households
         assert isinstance(households, list) and isinstance(housings, list)
         utilitymatrix = np.empty((len(housings), len(households)))
         utilitymatrix[:] = np.NaN
@@ -69,44 +71,50 @@ class Personal_Property_Market(object):
                 except BelowSubsistenceError: pass
         return utilitymatrix
 
-    def supplydemand_balances(self, utilitymatrix, *args, **kwargs):
-        householdcounts = [household.count for household in self.__households]
-        housingcounts = [housing.count for housing in self.__housings]    
+    def supplydemand_matrix(self, *args, **kwargs):
+        try: utilitymatrix = args.pop(0)
+        except: utilitymatrix = self.utility_matrix(*args, **kwargs)
         supplydemandmatrix = np.apply_along_axis(_normalize, 0, utilitymatrix)
+        return supplydemandmatrix
+        
+    def supplydemand_balances(self, *args, **kwargs):
+        try: supplydemandmatrix = args.pop(0)
+        except: supplydemandmatrix = self.supplydemand_matrix(*args, **kwargs)
+        householdcounts = np.array([household.count for household in self.__households])
+        housingcounts = np.array([housing.count for housing in self.__housings]) 
         supplydemandbalances = (np.nansum(supplydemandmatrix * householdcounts, axis=1) - housingcounts) / housingcounts           
         return supplydemandbalances
     
-    def price_adjustments(self, supplydemandbalances, *args, **kwargs):
+    def price_adjustments(self, *args, **kwargs):
+        try: supplydemandbalances = args.pop(0)
+        except: supplydemandbalances = self.supplydemand_balances(*args, **kwargs)        
         assert len(self.__housings) == len(supplydemandbalances)
-        prices = np.array([housing.sqftprice(self.__tenure, *args, **kwargs) for housing in self.__housings])
+        supplydemandbalances = np.clip(supplydemandbalances, -1, 1)
+        prices = np.array([housing.price(self.__tenure) for housing in self.__housings])
         priceadjustments = prices * supplydemandbalances
         return priceadjustments
-    
-    @keydispatcher
-    def table(self, key, *args, **kwargs): raise KeyError(key)
 
-    @table.register('household', 'households')
-    def tableHouseholds(self, *args, **kwargs):
-        dataframe = pd.concat([household.toSeries(*args, **kwargs) for household in self.__households], axis=1).transpose()
-        dataframe.columns = [uppercase(column) for column in dataframe.columns]
+    def supplydemandTable(self, *args, **kwargs):
+        householdcounts = np.array([household.count for household in self.__households])
+        supplydemandmatrix = self.supplydemand_matrix(self, *args, **kwargs) 
+        supplydemandmatrix[np.isnan(supplydemandmatrix)] = 0
+        dataframe = pd.DataFrame(supplydemandmatrix * householdcounts).transpose().fillna(0)
+        dataframe['T'] = dataframe.sum(axis=1)
+        dataframe.loc['T'] = dataframe.sum(axis=0)
+        dataframe.columns.name = 'Housings'
         dataframe.index.name = 'Households'
+        dataframe.name = uppercase(self.__tenure)        
         return dataframe
-
-    @table.register('housing', 'housings')
-    def tableHousings(self, *args, **kwargs):
-        dataframe = pd.concat([housing.toSeries(*args, **kwargs) for housing in self.__housings], axis=1).transpose()
-        dataframe.columns = [uppercase(column) for column in dataframe.columns]
-        dataframe.index.name = 'Housing'
-        return dataframe
-    
-    @table.register('price', 'prices')
-    def tablePrices(self, *args, tenure, **kwargs):
+        
+    def convergenceTable(self, *args, **kwargs):
         dataframe = pd.DataFrame(self.__prices)
-        dataframe.columns.name = 'Housing'
+        dataframe.columns.name = 'Housings'
         dataframe.index.name = 'Step'
+        dataframe.name = uppercase(self.__tenure)
         return dataframe
 
-
+        
+    
 
 
 

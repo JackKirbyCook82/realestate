@@ -41,6 +41,8 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     __minsqftrent = 0.0001
 
     @classmethod
+    def clear(cls): cls.__instances = {}
+    @classmethod
     def customize(cls, *args, **kwargs):
         try: cls.__concepts.update(kwargs['concepts'])
         except KeyError: pass  
@@ -71,8 +73,7 @@ class Housing(ntuple('Housing', 'geography date concepts')):
             self.__sqftrenthistory, self.__sqftpricehistory = np.array([sqftrent]), np.array([sqftprice])
             self.__valuerate = valuerate(date.year, units='month')
             self.__rentrate = rentrate(date.year, units='month')           
-    
-        
+         
     def __call__(self, priceadjustment, *args, tenure, **kwargs):
         self.evaluate(tenure, priceadjustment, *args, **kwargs)
 

@@ -44,9 +44,9 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     def clear(cls): cls.__instances = {}
     @classmethod
     def customize(cls, *args, **kwargs):
-        try: cls.__concepts.update(kwargs['concepts'])
-        except KeyError: pass  
         cls.__parameters = kwargs.get('parameters', cls.__parameters)
+        try: cls.__concepts.update(kwargs['concepts'])
+        except KeyError: pass         
 
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography)} 
@@ -141,6 +141,13 @@ class Housing(ntuple('Housing', 'geography date concepts')):
         series = pd.Series(content)
         return series
       
+    @classmethod 
+    def table(cls):
+        dataframe = pd.concat([housing.toSeries() for housing in cls.__instances.values()], axis=1).transpose()
+        dataframe.columns = [uppercase(column) for column in dataframe.columns]
+        dataframe.index.name = 'Housings'
+        return dataframe        
+    
     @classmethod
     def create(cls, *args, housing={}, neighborhood={}, prices, **kwargs):         
         assert isinstance(housing, dict) and isinstance(neighborhood, dict) and isinstance(prices, dict)
@@ -149,12 +156,18 @@ class Housing(ntuple('Housing', 'geography date concepts')):
         assert all([field in fields for field in ('unit', 'sqft', 'yearbuilt',)])
         return cls(*args, **housing, **neighborhood, **prices, concepts=concepts, **kwargs)  
         
-    @classmethod 
-    def table(cls):
-        dataframe = pd.concat([housing.toSeries() for housing in cls.__instances.values()], axis=1).transpose()
-        dataframe.columns = [uppercase(column) for column in dataframe.columns]
-        dataframe.index.name = 'Households'
-        return dataframe
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     
     

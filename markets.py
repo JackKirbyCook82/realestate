@@ -17,7 +17,7 @@ from realestate.finance import InsufficientFundError, InsufficientCoverageError,
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Investment_Property_Market', 'Personal_Property_Market']
+__all__ = ['Personal_Property_Market']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -28,10 +28,6 @@ _threshold = lambda x, z: np.where(x > z, x, np.NaN)
 _normalize = lambda x: x / np.nansum(x)
 _minmax = lambda x: (x - np.nanmin(x)) / (np.nanmax(x) - np.nanmin(x))
 _summation = lambda x: np.nansum(x)
-
-
-class Investment_Property_Market(object):
-    pass
 
 
 class Personal_Property_Market(object):

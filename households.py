@@ -6,7 +6,6 @@ Created on Sun Feb 23 2020
 
 """
 
-import numpy as np
 import pandas as pd
 from collections import namedtuple as ntuple
 
@@ -14,7 +13,7 @@ from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 from utilities.strings import uppercase
 
 from realestate.finance import Financials, UnstableLifeStyleError
-from realestate.utility import UtilityFunction
+from realestate.utility import Household_UtilityFunction
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -34,16 +33,12 @@ def createHouseholdKey(*args, date, age, race, language, education, children, si
 
 class Household(ntuple('Household', 'date age race language education children size financials utility')):
     __lifetimes = {'adulthood':15, 'retirement':65, 'death':95}  
-    __utility = 'simple'
-    __parameters = ('spending', 'crime', 'school', 'quality', 'space', 'proximity', 'community',)
 
     @classmethod
     def clear(cls): cls.__instances = {}    
     @classmethod
     def customize(cls, *args, **kwargs):
         cls.__lifetimes = kwargs.get('lifetimes', cls.__lifetimes)   
-        cls.__utility = kwargs.get('utility', cls.__utility)
-        cls.__parameters = kwargs.get('parameters', cls.__parameters)
 
     def __repr__(self): 
         content = {'utility':repr(self.utility), 'financials':repr(self.financials)}
@@ -68,11 +63,9 @@ class Household(ntuple('Household', 'date age race language education children s
         except AttributeError: self.__count = count
 
     def __call__(self, housing, *args, tenure, economy, **kwargs):
-        spending = self.evaluate(tenure, housing, *args, **kwargs)
-        factor = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, self.date.year)]))
-        consumption = spending * factor * economy.purchasingpower   
-        if consumption <= 0: raise UnstableLifeStyleError()
-        utility = self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
+        spending = self.evaluate(tenure, housing, *args, **kwargs) 
+        if spending <= 0: raise UnstableLifeStyleError()
+        utility = self.utility(*args, housing=housing, household=self, spending=spending, date=self.date, **kwargs)
         if utility < 0: raise NegativeUtilityError()
         return utility
     
@@ -110,21 +103,23 @@ class Household(ntuple('Household', 'date age race language education children s
         return series
 
     @classmethod
+    def table(cls):
+        dataframe = pd.concat([household.toSeries() for household in cls.__instances.values()], axis=1).transpose()
+        dataframe.columns = [uppercase(column) for column in dataframe.columns]
+        dataframe.index.name = 'Households'
+        return dataframe
+
+    @classmethod
     def create(cls, *args, date, household={}, financials={}, economy, **kwargs):
         assert isinstance(household, dict) and isinstance(financials, dict)
         rates = dict(wealthrate=economy.wealthrate(date.year, units='month'), incomerate=economy.incomerate(date.year, units='month'))
         income_horizon = max((cls.__lifetimes['retirement'] - household['age']) * 12, 0)
         consumption_horizon = max((cls.__lifetimes['death'] - household['age']) * 12, 0)   
         financials = Financials.create(income_horizon, consumption_horizon, **financials, **rates)
-        utility = UtilityFunction.getfunction(cls.__utility).create(cls.__parameters, **household)
+        utility = Household_UtilityFunction.create(**household)
         return cls(*args, date=date, **household, financials=financials, utility=utility, **kwargs)   
 
-    @classmethod
-    def table(cls):
-        dataframe = pd.concat([household.toSeries() for household in cls.__instances.values()], axis=1).transpose()
-        dataframe.columns = [uppercase(column) for column in dataframe.columns]
-        dataframe.index.name = 'Households'
-        return dataframe
+
     
     
     

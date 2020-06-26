@@ -62,7 +62,7 @@ class Household(ntuple('Household', 'date age race language education children s
         try: self.__count = self.__count + count
         except AttributeError: self.__count = count
 
-    def __call__(self, housing, *args, tenure, economy, **kwargs):
+    def __call__(self, housing, *args, tenure, **kwargs):
         spending = self.evaluate(tenure, housing, *args, **kwargs) 
         if spending <= 0: raise UnstableLifeStyleError()
         utility = self.utility(*args, housing=housing, household=self, spending=spending, date=self.date, **kwargs)

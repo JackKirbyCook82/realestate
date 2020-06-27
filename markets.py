@@ -8,7 +8,6 @@ Created on Mon May 18 2020
 
 import numpy as np
 import pandas as pd
-import math
 
 from utilities.strings import uppercase
 from utilities.utility import BelowSubsistenceError
@@ -36,7 +35,7 @@ class ConvergenceError(Exception): pass
 
 
 class Personal_Property_Market(object):
-    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.025, atol=0.025, maxsteps=250, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.01, atol=0.025, maxsteps=250, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
@@ -95,30 +94,19 @@ class Personal_Property_Market(object):
         prices = np.array([housing.price(self.__tenure) for housing in self.__housings])
         priceadjustments = prices * logsupplydemandbalances
         return priceadjustments
+ 
+    def table(self, *args, **kwargs):
+        householdcounts = np.array([household.count for household in self.__households])
+        supplydemandmatrix = self.supplydemand_matrix(self, *args, **kwargs) 
+        supplydemandmatrix[np.isnan(supplydemandmatrix)] = 0
+        dataframe = pd.DataFrame(supplydemandmatrix * householdcounts).transpose().fillna(0)
+        dataframe['T'] = dataframe.sum(axis=1)
+        dataframe.loc['T'] = dataframe.sum(axis=0)
+        dataframe.columns.name = 'Housings'
+        dataframe.index.name = 'Households'
+        dataframe.name = uppercase(self.__tenure)        
+        return dataframe
 
-#    self.__prices = np.concatenate([self.__prices, np.array([[housing.price(self.__tenure) for housing in self.__housings]])], axis=0)
-
-#    def supplydemandTable(self, *args, **kwargs):
-#        householdcounts = np.array([household.count for household in self.__households])
-#        supplydemandmatrix = self.supplydemand_matrix(self, *args, **kwargs) 
-#        supplydemandmatrix[np.isnan(supplydemandmatrix)] = 0
-#        dataframe = pd.DataFrame(supplydemandmatrix * householdcounts).transpose().fillna(0)
-#        dataframe['T'] = dataframe.sum(axis=1)
-#        dataframe.loc['T'] = dataframe.sum(axis=0)
-#        dataframe.columns.name = 'Housings'
-#        dataframe.index.name = 'Households'
-#        dataframe.name = uppercase(self.__tenure)        
-#        return dataframe
-        
-#    def convergenceTable(self, *args, **kwargs):
-#        dataframe = pd.DataFrame(self.__prices)
-#        dataframe.columns.name = 'Housings'
-#        dataframe.index.name = 'Step'
-#        dataframe.name = uppercase(self.__tenure)
-#        return dataframe
-
-        
-    
 
 
 

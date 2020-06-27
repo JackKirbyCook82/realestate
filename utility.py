@@ -21,7 +21,8 @@ __license__ = ""
 _flatten = lambda nesteditems: [item for items in nesteditems for item in items]
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
 _filterempty = lambda items: [item for item in _aslist(items) if item]
-
+_inverse = lambda items: np.array(items).astype('float64')**-1
+_normalize = lambda items: np.array(items) / np.sum(np.array(items))
 
 utilities = CSODict()
 
@@ -30,8 +31,10 @@ utilities = CSODict()
 @UtilityFunction.register('housing', 'cobbdouglas', parameters=('size', 'quality', 'location',), coefficents=[])
 class Housing_UtilityFunction: 
     @classmethod
-    def create(cls, *args, **kwargs): 
-        return cls(*args, amplitude=1, diminishrate=1, subsistences={}, weights={}, **kwargs)    
+    def create(cls, *args, poverty_sqft, poverty_yearbuilt, **kwargs): 
+        weights = {}
+        subsistences = {'size':int(poverty_sqft), 'quality':int(poverty_yearbuilt)}
+        return cls(*args, amplitude=1, diminishrate=1, subsistences=subsistences, weights=weights, **kwargs)    
     
     def execute(self, *args, housing, **kwargs):
         return {'size':housing.sqft, 'location':housing.location.rank, 'quality':housing.yearbuilt}

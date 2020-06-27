@@ -37,8 +37,6 @@ Quality = concept('quality', ['yearbuilt'])
 class Housing(ntuple('Housing', 'geography date concepts')):
     __concepts = dict(space=Space, quality=Quality, crime=Crime, school=School, community=Community, proximity=Proximity)
     __parameters = ('space', 'quality', 'crime', 'school', 'community', 'proximity',)
-    __minsqftprice = 0.0001
-    __minsqftrent = 0.0001
 
     @classmethod
     def clear(cls): cls.__instances = {}
@@ -65,12 +63,11 @@ class Housing(ntuple('Housing', 'geography date concepts')):
             cls.__instances[key] = newinstance
             return newinstance
 
-    def __init__(self, *args, count=1, sqftprice, sqftrent, sqftcost, rentrate, valuerate, date, **kwargs): 
+    def __init__(self, *args, count=1, price, rent, sqftcost, rentrate, valuerate, date, **kwargs): 
         try: self.__count = self.__count + count
         except (AttributeError, KeyError): 
             self.__count = count 
-            self.__sqftrent, self.__sqftprice, self.__sqftcost = sqftrent, sqftprice, sqftcost 
-            self.__sqftrenthistory, self.__sqftpricehistory = np.array([sqftrent]), np.array([sqftprice])
+            self.__rent, self.__price, self.__sqftcost = rent, price, sqftcost 
             self.__valuerate = valuerate(date.year, units='month')
             self.__rentrate = rentrate(date.year, units='month')           
          
@@ -80,13 +77,9 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     @keydispatcher
     def evaluate(self, tenure, priceadjustment, *args, **kwargs): raise KeyError(tenure) 
     @evaluate.register('renter')
-    def evaluate_renter(self, priceadjustment, *args, **kwargs): 
-        self.__sqftrent = max(self.__sqftrent + priceadjustment, self.__minsqftrent)
-        self.__sqftrenthistory = np.append(self.__sqftrenthistory, self.__sqftrent)
+    def evaluate_renter(self, priceadjustment, *args, **kwargs): self.__rent = self.__rent + priceadjustment
     @evaluate.register('owner')
-    def evaluate_owner(self, priceadjustment, *args, **kwargs):
-        self.__sqftprice = max(self.__sqftprice + priceadjustment, self.__minsqftprice)     
-        self.__sqftpricehistory = np.append(self.__sqftpricehistory, self.__sqftprice)
+    def evaluate_owner(self, priceadjustment, *args, **kwargs): self.__price = self.__price + priceadjustment  
     
     def todict(self): return self._asdict()
     def __getattr__(self, attr): return self.concepts[attr]
@@ -120,30 +113,31 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     def rentrate(self): return self.__rentrate    
     
     @property
-    def purchaseprice(self): return self.__sqftprice * self.sqft      
+    def purchaseprice(self): return self.__price    
     @property
     def ownercost(self): return self.__sqftcost * self.sqft    
     @property
-    def rentercost(self): return self.__sqftrent * self.sqft    
+    def rentercost(self): return self.__rent 
 
     @keydispatcher
     def price(self, tenure): raise KeyError(tenure)
     @price.register('renter', 'rent')
-    def priceRenter(self): return self.__sqftrent
+    def priceRenter(self): return self.__rent
     @price.register('owner', 'own')
-    def priceOwner(self): return self.__sqftprice
-    @price.register('cost')
-    def priceCost(self): return self.__sqftcost   
+    def priceOwner(self): return self.__price
 
     def toSeries(self):
         content = {'count':self.count, 'geography':self.geography.geoID, 'unit':self.unit, 'sqft':self.sqft, 'yearbuilt':self.yearbuilt}
-        content.update({'sqftprice':self.__sqftprice, 'sqftrent':self.__sqftrent})
+        content.update({'price':self.__price, 'rent':self.__rent})
         series = pd.Series(content)
         return series
       
     @classmethod 
-    def table(cls):
+    def table(cls, tenure=None):
         dataframe = pd.concat([housing.toSeries() for housing in cls.__instances.values()], axis=1).transpose()
+        if tenure == 'renter': dataframe.drop('price', axis=1, inplace=True)
+        elif tenure == 'owner': dataframe.drop('rent', axis=1, inplace=True)
+        else: pass
         dataframe.columns = [uppercase(column) for column in dataframe.columns]
         dataframe.index.name = 'Housings'
         return dataframe        

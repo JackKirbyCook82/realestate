@@ -31,9 +31,10 @@ utilities = CSODict()
 @UtilityFunction.register('housing', 'cobbdouglas', parameters=('size', 'quality', 'location',), coefficents=[])
 class Housing_UtilityFunction: 
     @classmethod
-    def create(cls, *args, poverty_sqft, poverty_yearbuilt, **kwargs): 
-        weights = {}
+    def create(cls, *args, poverty_sqft, poverty_yearbuilt, size_quality_ratio, size_location_ratio, **kwargs): 
         subsistences = {'size':int(poverty_sqft), 'quality':int(poverty_yearbuilt)}
+        alpha = 1 / (1 + (1/size_quality_ratio) + (1/size_location_ratio))
+        weights = {'size':alpha, 'quality':alpha/size_quality_ratio, 'location':alpha/size_location_ratio}
         return cls(*args, amplitude=1, diminishrate=1, subsistences=subsistences, weights=weights, **kwargs)    
     
     def execute(self, *args, housing, **kwargs):

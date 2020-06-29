@@ -38,6 +38,7 @@ class Household(ntuple('Household', 'date age race language education children s
     def clear(cls): cls.__instances = {}    
     @classmethod
     def customize(cls, *args, **kwargs):
+        cls.clear()
         cls.__lifetimes = kwargs.get('lifetimes', cls.__lifetimes)   
 
     def __repr__(self): 

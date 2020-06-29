@@ -42,13 +42,14 @@ class Housing(ntuple('Housing', 'geography date concepts')):
     def clear(cls): cls.__instances = {}
     @classmethod
     def customize(cls, *args, **kwargs):
+        cls.clear()
         cls.__parameters = kwargs.get('parameters', cls.__parameters)
         try: cls.__concepts.update(kwargs['concepts'])
-        except KeyError: pass         
+        except KeyError: pass 
 
     def __repr__(self): 
         content = {'date':repr(self.date), 'geography':repr(self.geography)} 
-        content.update({'sqftrent':str(self.__sqftrent), 'sqftprice':str(self.__sqftprice), 'sqftcost':str(self.__sqftcost)})
+        content.update({'rent':str(self.__rent), 'price':str(self.__price), 'sqftcost':str(self.__sqftcost)})
         content.update({key:repr(value) for key, value in self.concepts.items()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 

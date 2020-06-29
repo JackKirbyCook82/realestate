@@ -35,26 +35,32 @@ class ConvergenceError(Exception): pass
 
 
 class Personal_Property_Market(object):
-    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.01, atol=0.025, maxsteps=250, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.002, atol=0.005, maxsteps=250, stepsize=1, period=5, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings = households, housings
-        self.__maxsteps = maxsteps
+        self.__prices = np.expand_dims(np.array([housing.price(tenure) for housing in housings]), axis=1)
+        self.__maxsteps, self.__stepsize = maxsteps, stepsize
         self.__tenure = tenure
+        self.__period = period
         
     def __call__(self, *args, **kwargs): 
-        for step in range(self.__maxsteps):
+        for step in range(self.__maxsteps):           
             utilitymatrix = self.utility_matrix(self.__housings, self.__households, *args, **kwargs)
             supplydemandmatrix = self.supplydemand_matrix(utilitymatrix, *args, **kwargs)
             supplydemandbalances = self.supplydemand_balances(supplydemandmatrix, *args, **kwargs)
-            if self.__converged(supplydemandbalances): break
-            else: print('Market Coverging: Step={}, AvgError={}, MaxError={}'.format(step, _avgerror(supplydemandbalances), _maxerror(supplydemandbalances))) 
-            priceadjustments = self.price_adjustments(supplydemandbalances, *args, **kwargs)
+            errorbalances = supplydemandbalances - 1
+            if self.__converged(errorbalances): break
+            else: print('Market Coverging: Step={}, AvgError={}, MaxError={}'.format(step+1, _avgerror(errorbalances), _maxerror(errorbalances))) 
+            priceadjustments = self.price_adjustments(supplydemandbalances, *args, **kwargs) * self.__stepsize
             for priceadjustment, housing in zip(priceadjustments, self.__housings): housing(priceadjustment, *args, tenure=self.__tenure, **kwargs) 
-        if not self.__converged(supplydemandbalances): 
-            print('Failure Converging: Step={}, AvgError={}, MaxError={}'.format(step, _avgerror(supplydemandbalances), _maxerror(supplydemandbalances)))
-            raise ConvergenceError()
+            newprices = np.expand_dims(np.array([housing.price(self.__tenure) for housing in self.__housings]), axis=1)
+            self.__prices = np.append(self.__prices, newprices, axis=1)
+        if self.__converged(errorbalances): self.__prices = np.expand_dims(np.array([housing.price(self.__tenure) for housing in self.__housings]), axis=1)
+        if not self.__converged(errorbalances): 
+            print(self.__convergence(self.__period))
+            raise ConvergenceError(supplydemandbalances)
                  
     def utility_matrix(self, *args, **kwargs):
         try: housings, households = args.pop(0), args.pop(1)
@@ -84,15 +90,15 @@ class Personal_Property_Market(object):
         householdcounts = np.array([household.count for household in self.__households])
         housingcounts = np.array([housing.count for housing in self.__housings]) 
         supplydemandbalances = np.nansum(supplydemandmatrix * householdcounts, axis=1) / housingcounts           
-        logsupplydemandbalances = np.log(np.clip(supplydemandbalances, 0.1, 10)) / 10
-        return logsupplydemandbalances
+        return supplydemandbalances
     
     def price_adjustments(self, *args, **kwargs):
-        try: logsupplydemandbalances = args.pop(0)
-        except: logsupplydemandbalances = self.supplydemand_balances(*args, **kwargs)        
-        assert len(self.__housings) == len(logsupplydemandbalances)
+        try: supplydemandbalances = args.pop(0)
+        except: supplydemandbalances = self.supplydemand_balances(*args, **kwargs)        
+        assert len(self.__housings) == len(supplydemandbalances)
+        logsupplydemandbalances = np.log10(np.clip(supplydemandbalances, 0.1, 10)) 
         prices = np.array([housing.price(self.__tenure) for housing in self.__housings])
-        priceadjustments = prices * logsupplydemandbalances
+        priceadjustments = prices * logsupplydemandbalances * self.__stepsize
         return priceadjustments
  
     def table(self, *args, **kwargs):
@@ -107,7 +113,12 @@ class Personal_Property_Market(object):
         dataframe.name = uppercase(self.__tenure)        
         return dataframe
 
-
+    def __convergence(self, period):
+        dataframe = pd.DataFrame(self.__prices).transpose().rolling(window=period).mean().dropna(axis=0, how='all')
+        dataframe.columns.name = 'Housings'
+        dataframe.index.name = 'Step'
+        dataframe.name = uppercase(self.__tenure)
+        return dataframe
 
 
 

@@ -6,7 +6,6 @@ Created on Sun Feb 23 2020
 
 """
 
-import numpy as np
 import pandas as pd
 from collections import namedtuple as ntuple
 
@@ -72,15 +71,15 @@ class Housing(ntuple('Housing', 'geography date concepts')):
             self.__valuerate = valuerate(date.year, units='month')
             self.__rentrate = rentrate(date.year, units='month')           
          
-    def __call__(self, priceadjustment, *args, tenure, **kwargs):
-        self.evaluate(tenure, priceadjustment, *args, **kwargs)
+    def __call__(self, price, *args, tenure, **kwargs):
+        self.evaluate(tenure, price, *args, **kwargs)
 
     @keydispatcher
-    def evaluate(self, tenure, priceadjustment, *args, **kwargs): raise KeyError(tenure) 
+    def evaluate(self, tenure, price, *args, **kwargs): raise KeyError(tenure) 
     @evaluate.register('renter')
-    def evaluate_renter(self, priceadjustment, *args, **kwargs): self.__rent = self.__rent + priceadjustment
+    def evaluate_renter(self, price, *args, **kwargs): self.__rent = price
     @evaluate.register('owner')
-    def evaluate_owner(self, priceadjustment, *args, **kwargs): self.__price = self.__price + priceadjustment  
+    def evaluate_owner(self, price, *args, **kwargs): self.__price = price  
     
     def todict(self): return self._asdict()
     def __getattr__(self, attr): return self.concepts[attr]

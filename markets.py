@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 
 from utilities.strings import uppercase
 from utilities.utility import BelowSubsistenceError
+from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
 from realestate.finance import InsufficientFundError, InsufficientCoverageError, UnsolventLifeStyleError, UnstableLifeStyleError
 
@@ -32,25 +33,10 @@ _avgerror = lambda x: np.round(np.mean(x**2)**0.5, 3)
 _maxerror = lambda x: np.round(np.max(x**2)**0.5, 3)
 
 
-#    def price_adjustments(self, *args, **kwargs):
-#        try: supplydemandbalances = args.pop(0)
-#        except: supplydemandbalances = self.supplydemand_balances(*args, **kwargs)        
-#        assert len(self.__housings) == len(supplydemandbalances)
-#        logsupplydemandbalances = np.log10(np.clip(supplydemandbalances, 0.1, 10)) 
-#        prices = np.array([housing.price(self.__tenure) for housing in self.__housings])
-#        priceadjustments = prices * logsupplydemandbalances
-#        return priceadjustments
-
-
-def pricedelta_calculation(supply, demand, price, elasticity):
-    assert all([isinstance(item, np.ndarray) for item in (supply, demand, price, elasticity,)])
-    assert supply.shape == demand.shape == price.shape == elasticity.shape
-    dp = np.divide(1, elasticity) * (np.divide(supply, demand) - 1) * price
-    return dp
-
-def elasticity_calculation(supply, demand, price, dprice):
-    e = ((supply - demand) / demand) / (dprice / price)
-    return e
+def price_delta_percent(supply, demand, price, elasticity):
+    assert all([isinstance(item, np.ndarray) for item in (supply, demand, elasticity,)])
+    assert supply.shape == demand.shape == elasticity.shape
+    return np.divide(1, elasticity) * (np.divide(supply, np.maximum(demand, 1)) - 1)
 
 
 class ConvergenceError(Exception): pass
@@ -63,79 +49,87 @@ class Market(ABC):
     def demands(self, *args, **kwargs): pass
     @abstractmethod
     def prices(self, *args, **kwargs): pass
-    @abstractmethod
-    def elasticitys(self, *args, **kwargs): pass
 
 
 class Market_History(object):
-    @property
-    def prices(self): return self.__prices
-    @property
-    def demands(self): return self.__demands
-    @property
-    def supplys(self): return self.__supplys
-    @property
-    def elasticitys(self): return self.__elasticitys
+    def __bool__(self): return len(self) > 0
+    def __len__(self): 
+        try: return self.__prices.shape[1] 
+        except AttributeError: return 0
     
-    def __init__(self, prices, supplys, demands, elasticitys):
-        assert len(prices) == len(supplys) == len(demands)
-        self.__prices = np.expand_dims(prices, axis=1)
-        self.__demands = np.expand_dims(demands, axis=1)        
-        self.__supplys = np.expand_dims(supplys, axis=1)
-        self.__elasticitys = np.expand_dims(elasticitys, axis=1)
+    @property
+    def prices(self): return self.__prices if self else None
+    @property
+    def demands(self): return self.__demands if self else None
+    @property
+    def supplys(self): return self.__supplys if self else None
 
+    @property
+    def dP(self): return self.prices[:, 1:] - self.prices[:, :-1] if len(self) > 1 else None
+    @property
+    def dQ(self): return self.demands[:, 1:] - self.demands[:, :-1] if len(self) > 1 else None
+    @property
+    def dS(self): return self.supplys[:, 1:] - self.supplys[:, :-1] if len(self) > 1 else None
+   
+    def __init__(self, *args, **kwargs): pass
     def __call__(self, *args, **kwargs):
-        try: supplys, demands, prices, elasticitys = [getattr(kwargs.pop('market'), attr) for attr in ('supplys', 'demands', 'prices', 'elasticitys',)]
-        except KeyError: supplys, demands, prices, elasticitys = [kwargs[key] for key in ('supplys', 'demands', 'prices', 'elasticitys',)]
-        self.__update(supplys, demands, prices, elasticitys)            
-        
-    def __update(self, supplys, demands, prices, elasticitys):
-        self.__supplys = np.append(self.supplys, np.expand_dims(supplys, axis=1), axis=1)
-        self.__demands = np.append(self.demands, np.expand_dims(demands, axis=1), axis=1)
-        self.__prices = np.append(self.prices, np.expand_dims(prices, axis=1), axis=1)
-        self.__elasticitys = np.append(self.elasticitys, np.expand_dims(elasticitys, axis=1), axis=1)
-
-    @classmethod
-    def fromMarket(cls, market, *args, **kwargs):
-        assert isinstance(market, Market)
-        supplys = market.supplybalances(*args, **kwargs)
-        demands = market.demandbalances(*args, **kwargs)
-        prices = market.pricebalances(*args, **kwargs)
-        elasticitys = market.elasticitybalances(*args, **kwargs)
-        return cls(prices, supplys, demands, elasticitys)
+        try: supplys, demands, prices = [getattr(kwargs.pop('market'), attr) for attr in ('supplys', 'demands', 'prices',)]
+        except KeyError: supplys, demands, prices = [kwargs[key] for key in ('supplys', 'demands', 'prices',)]
+        assert all([isinstance(items, np.ndarray) for items in (supplys, demands, prices,)])
+        assert supplys.shape == demands.shape == prices.shape
+        try: self.__supplys = np.append(self.supplys, np.expand_dims(supplys, axis=1), axis=1)
+        except ValueError: self.__supplys = np.expand_dims(supplys, axis=1) 
+        try: self.__demands = np.append(self.demands, np.expand_dims(demands, axis=1), axis=1)
+        except ValueError: self.__demands = np.expand_dims(demands, axis=1)           
+        try: self.__prices = np.append(self.prices, np.expand_dims(prices, axis=1), axis=1)
+        except ValueError: self.__prices = np.expand_dims(prices, axis=1)     
     
-    def table(self, period=0):
+    @keydispatcher
+    def table(self, tabletype, *args, **kwargs): raise KeyError(tabletype)
+    @table.register('price', 'prices')
+    def tablePrice(self, *args, **kwargs): return self.__dataframe(self.prices, *args, **kwargs) if len(self) > 1 else None
+    @table.register('demand', 'demands')
+    def tableDemand(self, *args, **kwargs): return self.__dataframe(self.demands, *args, **kwargs) if len(self) > 1 else None
+    @table.register('supply', 'supplys')
+    def tableSupply(self, *args, **kwargs): return self.__dataframe(self.supplys, *args, **kwargs) if len(self) > 1 else None
+    @table.register('elasticity', 'elasticitys')
+    def tableElasticity(self, *args, **kwargs): return self.__dataframe(self.elasticitys, *args, **kwargs) if len(self) > 1 else None
+    @table.register('housing')
+    def tableHousing(self, *args, index, **kwargs): 
+        if len(self) <= 1: return None
+        data = {'price':self.prices[index, 1:], 'demand':self.demands[index, 1:], 'supply':self.supplys[index, 1:], 'elasticity':self.elasticitys[index, :]}
+        return self.__dataframe(data, *args, **kwargs)
+
+    def __dataframe(self, data, *args, period=0, **kwargs):
         assert period >= 0 and isinstance(period, int)
-        dataframe = pd.DataFrame(self.__prices).transpose()
+        assert isinstance(data, np.ndarray)
+        dataframe = pd.DataFrame(data).transpose()
         if period > 0: dataframe = dataframe.rolling(window=period).mean().dropna(axis=0, how='all')
-        dataframe.columns.name = 'Housings'
-        dataframe.index.name = 'Step'
-        dataframe.name = uppercase(self.__tenure)
         return dataframe    
 
 
 class Personal_Property_Market(Market):
-    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.005, atol=0.01, stepsize=0.1, maxsteps=250, elasticity=1, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.005, atol=0.01, maxsteps=100, stepsize=0.1, elasticity=-1, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings, self.__tenure = households, housings, tenure
-        self.__elasticitys = np.ones(len(self.__housings)) * elasticity
-        self.__maxsteps, self.__stepsize = maxsteps, stepsize
- 
+        self.__elasticitys = kwargs.get('elasticitys', np.ones(len(housings)) * elasticity)
+        self.__maxsteps, self.__stepsize = maxsteps, stepsize   
+        try: self.__history = kwargs['history']
+        except KeyError: pass
+        
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
-            supplys, demands = self.supplys(*args, **kwargs), self.demands(*args, **kwargs)
+            demands, supplys, prices = self.demands(*args, **kwargs), self.supplys(*args, **kwargs), self.prices(*args, **kwargs)
+            try: self.__history(demands=demands, supplys=supplys, prices=prices)
+            except AttributeError: pass
             errors = (demands / supplys) - 1
             if self.__converged(errors): break
             else: print('Market Coverging: Step={}, AvgError={}, MaxError={}'.format(step+1, _avgerror(errors), _maxerror(errors))) 
-            prices = self.prices(*args, **kwargs)
-            elasticitys = self.elasticitys(*args, **kwargs)
-            pricedifferentials = pricedelta_calculation(supplys, demands, prices, elasticitys)
-            newprices = prices + pricedifferentials
-            newelasticitys = elasticity_calculation(supplys, demands, newprices, pricedifferentials)
+            pdp = price_delta_percent(supplys, demands, prices, self.__elasticitys)
+            newprices = prices * ((pdp * self.__stepsize) + 1) 
             for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs) 
-            self.__elasticitys = newelasticitys
         if not self.__converged(errors): raise ConvergenceError()
 
     def supplydemandmatrix(self, *args, **kwargs): return np.apply_along_axis(_normalize, 0, self.utilitymatrix(*args, **kwargs))              
@@ -153,7 +147,6 @@ class Personal_Property_Market(Market):
         return utilitymatrix
        
     def prices(self, *args, **kwargs): return np.array([housing.price(self.__tenure) for housing in self.__housings])
-    def elasticitys(self, *args, **kwargs): return self.__elasticitys
     def supplys(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])     
     def demands(self, *args, **kwargs): 
         supplydemandmatrix = self.supplydemandmatrix(*args, **kwargs)
@@ -162,7 +155,7 @@ class Personal_Property_Market(Market):
 
     def table(self, *args, **kwargs):
         householdcounts = np.array([household.count for household in self.__households])
-        supplydemandmatrix = self.supplydemand_matrix(self, *args, **kwargs) 
+        supplydemandmatrix = self.supplydemandmatrix(self, *args, **kwargs) 
         supplydemandmatrix[np.isnan(supplydemandmatrix)] = 0
         dataframe = pd.DataFrame(supplydemandmatrix * householdcounts).transpose().fillna(0)
         dataframe['T'] = dataframe.sum(axis=1)

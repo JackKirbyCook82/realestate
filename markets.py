@@ -8,6 +8,7 @@ Created on Mon May 18 2020
 
 import numpy as np
 import pandas as pd
+from numbers import Number
 from abc import ABC, abstractmethod
 
 from utilities.strings import uppercase
@@ -33,13 +34,18 @@ _avgerror = lambda x: np.round(np.mean(x**2)**0.5, 3)
 _maxerror = lambda x: np.round(np.max(x**2)**0.5, 3)
 
 
-def price_delta_percent(supply, demand, price, elasticity):
-    assert all([isinstance(item, np.ndarray) for item in (supply, demand, elasticity,)])
-    assert supply.shape == demand.shape == elasticity.shape
-    return np.divide(1, elasticity) * (np.divide(supply, np.maximum(demand, 1)) - 1)
+#def price_adjustments(supply, demand, elasticity, stepsize):
+#    assert all([isinstance(item, np.ndarray) for item in (supply, demand, elasticity,)])
+#    assert supply.shape == demand.shape == elasticity.shape
+#    assert isinstance(stepsize, Number)
+#    return np.multiply((elasticity * stepsize), (np.divide(supply, demand) - 1)) + 1 
+
+percent_delta_price = lambda supply, demand, elasticity: (1 / elasticity) * ((supply / demand) - 1)
+percent_price = lambda pdp, step: (pdp * step) + 1 
 
 
 class ConvergenceError(Exception): pass
+class HistoryLengthError(Exception): pass
 
 
 class Market(ABC):
@@ -72,7 +78,7 @@ class Market_History(object):
     def dS(self): return self.supplys[:, 1:] - self.supplys[:, :-1] if len(self) > 1 else None
    
     def __init__(self, *args, **kwargs): pass
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs): 
         try: supplys, demands, prices = [getattr(kwargs.pop('market'), attr) for attr in ('supplys', 'demands', 'prices',)]
         except KeyError: supplys, demands, prices = [kwargs[key] for key in ('supplys', 'demands', 'prices',)]
         assert all([isinstance(items, np.ndarray) for items in (supplys, demands, prices,)])
@@ -84,19 +90,22 @@ class Market_History(object):
         try: self.__prices = np.append(self.prices, np.expand_dims(prices, axis=1), axis=1)
         except ValueError: self.__prices = np.expand_dims(prices, axis=1)     
     
+    def table(self, tabletype, *args, **kwargs): 
+        if len(self) <= 1: raise HistoryLengthError()
+        else: return self.__table(tabletype, *args, **kwargs) 
+        
     @keydispatcher
-    def table(self, tabletype, *args, **kwargs): raise KeyError(tabletype)
-    @table.register('price', 'prices')
-    def tablePrice(self, *args, **kwargs): return self.__dataframe(self.prices, *args, **kwargs) if len(self) > 1 else None
-    @table.register('demand', 'demands')
-    def tableDemand(self, *args, **kwargs): return self.__dataframe(self.demands, *args, **kwargs) if len(self) > 1 else None
-    @table.register('supply', 'supplys')
-    def tableSupply(self, *args, **kwargs): return self.__dataframe(self.supplys, *args, **kwargs) if len(self) > 1 else None
-    @table.register('elasticity', 'elasticitys')
-    def tableElasticity(self, *args, **kwargs): return self.__dataframe(self.elasticitys, *args, **kwargs) if len(self) > 1 else None
-    @table.register('housing')
-    def tableHousing(self, *args, index, **kwargs): 
-        if len(self) <= 1: return None
+    def __table(self, tabletype, *args, **kwargs): raise KeyError(tabletype)
+    @__table.register('price', 'prices')
+    def __tablePrice(self, *args, **kwargs): return self.__dataframe(self.prices, *args, **kwargs) 
+    @__table.register('demand', 'demands')
+    def __tableDemand(self, *args, **kwargs): return self.__dataframe(self.demands, *args, **kwargs)
+    @__table.register('supply', 'supplys')
+    def __tableSupply(self, *args, **kwargs): return self.__dataframe(self.supplys, *args, **kwargs)
+    @__table.register('elasticity', 'elasticitys')
+    def __tableElasticity(self, *args, **kwargs): return self.__dataframe(self.elasticitys, *args, **kwargs) 
+    @__table.register('housing')
+    def __tableHousing(self, *args, index, **kwargs): 
         data = {'price':self.prices[index, 1:], 'demand':self.demands[index, 1:], 'supply':self.supplys[index, 1:], 'elasticity':self.elasticitys[index, :]}
         return self.__dataframe(data, *args, **kwargs)
 
@@ -109,7 +118,7 @@ class Market_History(object):
 
 
 class Personal_Property_Market(Market):
-    def __init__(self, tenure, *args, households=[], housings=[], rtol=0.005, atol=0.01, maxsteps=100, stepsize=0.1, elasticity=-1, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], elasticity=-1, stepsize=0.1, maxsteps=100, rtol=0.005, atol=0.01, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
@@ -127,8 +136,9 @@ class Personal_Property_Market(Market):
             errors = (demands / supplys) - 1
             if self.__converged(errors): break
             else: print('Market Coverging: Step={}, AvgError={}, MaxError={}'.format(step+1, _avgerror(errors), _maxerror(errors))) 
-            pdp = price_delta_percent(supplys, demands, prices, self.__elasticitys)
-            newprices = prices * ((pdp * self.__stepsize) + 1) 
+            pdp = percent_delta_price(supplys, demands, self.__elasticitys)
+            pp = percent_price(pdp, self.__stepsize) 
+            newprices = pp * prices
             for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs) 
         if not self.__converged(errors): raise ConvergenceError()
 

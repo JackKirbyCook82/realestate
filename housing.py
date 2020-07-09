@@ -72,14 +72,14 @@ class Housing(ntuple('Housing', 'geography date concepts')):
             self.__rentrate = rentrate(date.year, units='month')           
          
     def __call__(self, price, *args, tenure, **kwargs):
-        self.evaluate(tenure, price, *args, **kwargs)
+        self.updateprice(tenure, price, *args, **kwargs)
 
     @keydispatcher
-    def evaluate(self, tenure, price, *args, **kwargs): raise KeyError(tenure) 
-    @evaluate.register('renter')
-    def evaluate_renter(self, price, *args, **kwargs): self.__rent = price
-    @evaluate.register('owner')
-    def evaluate_owner(self, price, *args, **kwargs): self.__price = price  
+    def updateprice(self, tenure, price, *args, **kwargs): raise KeyError(tenure) 
+    @updateprice.register('renter')
+    def updateprice_renter(self, price, *args, **kwargs): self.__rent = price
+    @updateprice.register('owner')
+    def updatepricee_owner(self, price, *args, **kwargs): self.__price = price  
     
     def todict(self): return self._asdict()
     def __getattr__(self, attr): return self.concepts[attr]

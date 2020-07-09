@@ -8,7 +8,6 @@ Created on Mon May 18 2020
 
 import numpy as np
 import pandas as pd
-from numbers import Number
 from abc import ABC, abstractmethod
 
 from utilities.strings import uppercase
@@ -33,16 +32,8 @@ _summation = lambda x: np.nansum(x)
 _avgerror = lambda x: np.round(np.mean(x**2)**0.5, 3) 
 _maxerror = lambda x: np.round(np.max(x**2)**0.5, 3)
 
-
-#def price_adjustments(supply, demand, elasticity, stepsize):
-#    assert all([isinstance(item, np.ndarray) for item in (supply, demand, elasticity,)])
-#    assert supply.shape == demand.shape == elasticity.shape
-#    assert isinstance(stepsize, Number)
-#    return np.multiply((elasticity * stepsize), (np.divide(supply, demand) - 1)) + 1 
-
 percent_delta_price = lambda supply, demand, elasticity: (1 / elasticity) * ((supply / demand) - 1)
 percent_price = lambda pdp, step: (pdp * step) + 1 
-
 
 class ConvergenceError(Exception): pass
 class HistoryLengthError(Exception): pass
@@ -130,32 +121,37 @@ class Personal_Property_Market(Market):
         
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
-            demands, supplys, prices = self.demands(*args, **kwargs), self.supplys(*args, **kwargs), self.prices(*args, **kwargs)
+            demands = self.demands(*args, **kwargs)
+            supplys = self.supplys(*args, **kwargs)
+            prices = self.prices(*args, **kwargs)
             try: self.__history(demands=demands, supplys=supplys, prices=prices)
             except AttributeError: pass
-            errors = (demands / supplys) - 1
-            if self.__converged(errors): break
-            else: print('Market Coverging: Step={}, AvgError={}, MaxError={}'.format(step+1, _avgerror(errors), _maxerror(errors))) 
             pdp = percent_delta_price(supplys, demands, self.__elasticitys)
             pp = percent_price(pdp, self.__stepsize) 
             newprices = pp * prices
             for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs) 
-        if not self.__converged(errors): raise ConvergenceError()
-
-    def supplydemandmatrix(self, *args, **kwargs): return np.apply_along_axis(_normalize, 0, self.utilitymatrix(*args, **kwargs))              
+            
     def utilitymatrix(self, *args, **kwargs):
         utilitymatrix = np.empty((len(self.__housings), len(self.__households)))
+        deltamatrix = np.empty((len(self.__housings), len(self.__households)))
         utilitymatrix[:] = np.NaN
+        deltamatrix[:] = np.NaN
         for i, housing in enumerate(self.__housings):
             for j, household in enumerate(self.__households):
-                try: utilitymatrix[i, j] = household(housing, *args, tenure=self.__tenure, **kwargs)
+                try: utilitymatrix[i, j], deltamatrix[i, j] = household(housing, *args, tenure=self.__tenure, **kwargs)
                 except InsufficientFundError: pass
                 except InsufficientCoverageError: pass
                 except UnsolventLifeStyleError: pass
                 except UnstableLifeStyleError: pass
                 except BelowSubsistenceError: pass
-        return utilitymatrix
-       
+        return utilitymatrix, deltamatrix
+     
+    def supplydemandmatrix(self, *args, **kwargs): 
+        utilitymatrix, deltamatrix = self.utilitymatrix(*args, **kwargs)
+
+#       np.apply_along_axis(_normalize, 0, )      
+        return
+    
     def prices(self, *args, **kwargs): return np.array([housing.price(self.__tenure) for housing in self.__housings])
     def supplys(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])     
     def demands(self, *args, **kwargs): 

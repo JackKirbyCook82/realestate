@@ -24,7 +24,6 @@ __license__ = ""
 
 class PrematureHouseholderError(Exception): pass
 class DeceasedHouseholderError(Exception): pass
-class NegativeUtilityError(Exception): pass
 
 
 def createHouseholdKey(*args, date, age, race, language, education, children, size, financials, utility, **kwargs):
@@ -64,21 +63,21 @@ class Household(ntuple('Household', 'date age race language education children s
         except AttributeError: self.__count = count
 
     def __call__(self, housing, *args, tenure, **kwargs):
-        spending = self.evaluate(tenure, housing, *args, **kwargs) 
+        spending = self.spending(tenure, housing, *args, **kwargs) 
         if spending <= 0: raise UnstableLifeStyleError()
         utility = self.utility(*args, housing=housing, household=self, spending=spending, date=self.date, **kwargs)
-        if utility < 0: raise NegativeUtilityError()
-        return utility
+        delta = self.utility.derivative(['spending'], *args, housing=housing, household=self, spending=spending, date=self.date, **kwargs)        
+        return utility, delta
     
     @keydispatcher
-    def evaluate(self, tenure, housing, *args, **kwargs): raise KeyError(tenure) 
-    @evaluate.register('renter')
-    def evaluate_renter(self, housing, *args, **kwargs):
+    def spending(self, tenure, housing, *args, **kwargs): raise KeyError(tenure) 
+    @spending.register('renter')
+    def spending_renter(self, housing, *args, **kwargs):
         newfinancials = self.financials.sale(*args, **kwargs)    
         housingcost = housing.rentercost
         return newfinancials.consumption - housingcost  
-    @evaluate.register('owner')
-    def evaluate_owner(self, housing, *args, **kwargs):
+    @spending.register('owner')
+    def spending_owner(self, housing, *args, **kwargs):
         newfinancials = self.financials.sale(*args, **kwargs)
         newfinancials = newfinancials.purchase(housing.purchaseprice, *args, **kwargs)
         housingcost = housing.ownercost + newfinancials.mortgage.payment

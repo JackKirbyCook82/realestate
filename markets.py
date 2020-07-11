@@ -11,7 +11,6 @@ import pandas as pd
 from abc import ABC, abstractmethod
 
 from utilities.strings import uppercase
-from utilities.utility import BelowSubsistenceError
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 
 from realestate.finance import InsufficientFundError, InsufficientCoverageError, UnsolventLifeStyleError, UnstableLifeStyleError
@@ -32,8 +31,6 @@ _summation = lambda x: np.nansum(x)
 _avgerror = lambda x: np.round(np.mean(x**2)**0.5, 3) 
 _maxerror = lambda x: np.round(np.max(x**2)**0.5, 3)
 
-percent_delta_price = lambda supply, demand, elasticity: (1 / elasticity) * ((supply / demand) - 1)
-percent_price = lambda pdp, step: (pdp * step) + 1 
 
 class ConvergenceError(Exception): pass
 class HistoryLengthError(Exception): pass
@@ -126,24 +123,26 @@ class Personal_Property_Market(Market):
         self.__maxsteps, self.__stepsize = maxsteps, stepsize   
         try: self.__history = kwargs['history']
         except KeyError: pass
+ 
+    def __call__(self, *args, **kwargs): 
+        for step in range(self.__maxsteps):           
+            demands = self.demands(*args, **kwargs)
+            supplys = self.supplys(*args, **kwargs)
+            prices = self.prices(*args, **kwargs)
+            try: self.__history(demands=demands, supplys=supplys, prices=prices)
+            except AttributeError: pass
+            logsupplydemand = np.log10(np.clip(demands/supplys, 0.1, 10))
+            deltaprices = prices * logsupplydemand * self.__stepsize       
+            newprices = prices + deltaprices
+            for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs)     
   
-#    def __call__(self, *args, **kwargs): 
-#        for step in range(self.__maxsteps):           
-#            demands = self.demands(*args, **kwargs)
-#            supplys = self.supplys(*args, **kwargs)
-#            prices = self.prices(*args, **kwargs)
-#            try: self.__history(demands=demands, supplys=supplys, prices=prices)
-#            except AttributeError: pass
-#            pdp = percent_delta_price(supplys, demands, self.__elasticitys)
-#            pp = percent_price(pdp, self.__stepsize) 
-#            newprices = pp * prices
-#            for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs)     
-  
-    def supply(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])
-    def demand(self, *args, **kwargs): 
-        uMatrix = np.apply_along_axis(_normalize, 1, self.uMatrix(*args, **kwargs))
+    def prices(self, *args, **kwargs): return np.array([housing.price(self.__tenure) for housing in self.__housings])
+    def supplys(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])
+    def demands(self, *args, **kwargs): 
+        uMatrix = self.uMatrix(*args, **kwargs)
+        uMatrix = np.apply_along_axis(_normalize, 0, uMatrix)
         weights = np.array([household.count for household in self.__households])
-        return uMatrix * weights  
+        return np.apply_along_axis(_summation, 1, uMatrix * weights)  
     
     def elasticity(self, *args, **kwargs): 
         dpMatrix = np.apply_along_axis(_summation, 2, self.dpMatrix(*args, **kwargs))
@@ -151,7 +150,7 @@ class Personal_Property_Market(Market):
         return dpMatrix
     
     def uMatrix(self, *args, **kwargs):
-        uMatrix = np.empty((len(self.__housing), len(self.__households),))
+        uMatrix = np.empty((len(self.__housings), len(self.__households),))
         uMatrix[:] = np.NaN
         for i, housing in enumerate(self.__housings):
             for j, household in enumerate(self.__households):
@@ -160,7 +159,6 @@ class Personal_Property_Market(Market):
                 except InsufficientCoverageError: pass
                 except UnsolventLifeStyleError: pass
                 except UnstableLifeStyleError: pass
-                except BelowSubsistenceError: pass
         return uMatrix
     
     def cpMatrix(self, *args, economy, date, **kwargs):
@@ -169,7 +167,7 @@ class Personal_Property_Market(Market):
         return cpMatrix
 
     def ucMatrix(self, *args, **kwargs):
-        ucMatrix = np.empty((len(self.__housing), len(self.__households),))
+        ucMatrix = np.empty((len(self.__housings), len(self.__households),))
         ucMatrix[:] = np.NaN
         for i, housing in enumerate(self.__housings):
             for j, household in enumerate(self.__households):
@@ -178,7 +176,6 @@ class Personal_Property_Market(Market):
                 except InsufficientCoverageError: pass
                 except UnsolventLifeStyleError: pass
                 except UnstableLifeStyleError: pass
-                except BelowSubsistenceError: pass
         return ucMatrix
 
     def zuMatrix(self, uMatrix, *args, **kwargs):

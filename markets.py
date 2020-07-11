@@ -24,9 +24,9 @@ __license__ = ""
 
 
 _aslist = lambda items: [items] if not isinstance(items, (list, tuple)) else list(items)
-_zscore = lambda x: (x - np.nanmean(x)) / np.nanstd(x)
-_threshold = lambda x, z: np.where(x > z, x, np.NaN)
+_multiply = lambda x, y: x * y
 _normalize = lambda x: x / np.nansum(x)
+_diffnormalize = lambda x: (np.nansum(x) - x) / (np.nansum(x)**2)
 _minmax = lambda x: (x - np.nanmin(x)) / (np.nanmax(x) - np.nanmin(x))
 _summation = lambda x: np.nansum(x)
 _avgerror = lambda x: np.round(np.mean(x**2)**0.5, 3) 
@@ -109,56 +109,102 @@ class Market_History(object):
 
 
 class Personal_Property_Market(Market):
-    def __init__(self, tenure, *args, households=[], housings=[], elasticity=-1, stepsize=0.1, maxsteps=100, rtol=0.005, atol=0.01, **kwargs):
+    @property
+    def i(self): return self.__housings
+    @property
+    def j(self): return self.__households
+    @property
+    def k(self): return self.__housings
+    @property
+    def shape(self): return (len(self.i), len(self.j), len(self.k),)
+    
+    def __init__(self, tenure, *args, households=[], housings=[], stepsize=0.1, maxsteps=100, rtol=0.005, atol=0.01, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings, self.__tenure = households, housings, tenure
-        self.__elasticitys = kwargs.get('elasticitys', np.ones(len(housings)) * elasticity)
         self.__maxsteps, self.__stepsize = maxsteps, stepsize   
         try: self.__history = kwargs['history']
         except KeyError: pass
-        
-    def __call__(self, *args, **kwargs): 
-        for step in range(self.__maxsteps):           
-            demands = self.demands(*args, **kwargs)
-            supplys = self.supplys(*args, **kwargs)
-            prices = self.prices(*args, **kwargs)
-            try: self.__history(demands=demands, supplys=supplys, prices=prices)
-            except AttributeError: pass
-            pdp = percent_delta_price(supplys, demands, self.__elasticitys)
-            pp = percent_price(pdp, self.__stepsize) 
-            newprices = pp * prices
-            for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs) 
-            
-    def utilitymatrix(self, *args, **kwargs):
-        utilitymatrix = np.empty((len(self.__housings), len(self.__households)))
-        deltamatrix = np.empty((len(self.__housings), len(self.__households)))
-        utilitymatrix[:] = np.NaN
-        deltamatrix[:] = np.NaN
+  
+#    def __call__(self, *args, **kwargs): 
+#        for step in range(self.__maxsteps):           
+#            demands = self.demands(*args, **kwargs)
+#            supplys = self.supplys(*args, **kwargs)
+#            prices = self.prices(*args, **kwargs)
+#            try: self.__history(demands=demands, supplys=supplys, prices=prices)
+#            except AttributeError: pass
+#            pdp = percent_delta_price(supplys, demands, self.__elasticitys)
+#            pp = percent_price(pdp, self.__stepsize) 
+#            newprices = pp * prices
+#            for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs)     
+  
+    def supply(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])
+    def demand(self, *args, **kwargs): 
+        uMatrix = np.apply_along_axis(_normalize, 1, self.uMatrix(*args, **kwargs))
+        weights = np.array([household.count for household in self.__households])
+        return uMatrix * weights  
+    
+    def elasticity(self, *args, **kwargs): 
+        dpMatrix = np.apply_along_axis(_summation, 2, self.dpMatrix(*args, **kwargs))
+        dpMatrix = np.apply_along_axis(_summation, 1, dpMatrix)
+        return dpMatrix
+    
+    def uMatrix(self, *args, **kwargs):
+        uMatrix = np.empty((len(self.__housing), len(self.__households),))
+        uMatrix[:] = np.NaN
         for i, housing in enumerate(self.__housings):
             for j, household in enumerate(self.__households):
-                try: utilitymatrix[i, j], deltamatrix[i, j] = household(housing, *args, tenure=self.__tenure, **kwargs)
+                try: uMatrix[i, j] = household(housing, *args, tenure=self.__tenure, **kwargs)
                 except InsufficientFundError: pass
                 except InsufficientCoverageError: pass
                 except UnsolventLifeStyleError: pass
                 except UnstableLifeStyleError: pass
                 except BelowSubsistenceError: pass
-        return utilitymatrix, deltamatrix
-     
-    def supplydemandmatrix(self, *args, **kwargs): 
-        utilitymatrix, deltamatrix = self.utilitymatrix(*args, **kwargs)
-
-#       np.apply_along_axis(_normalize, 0, )      
-        return
+        return uMatrix
     
-    def prices(self, *args, **kwargs): return np.array([housing.price(self.__tenure) for housing in self.__housings])
-    def supplys(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])     
-    def demands(self, *args, **kwargs): 
-        supplydemandmatrix = self.supplydemandmatrix(*args, **kwargs)
-        householdcounts = np.array([household.count for household in self.__households])
-        return np.nansum(supplydemandmatrix * householdcounts, axis=1)
+    def cpMatrix(self, *args, economy, date, **kwargs):
+        cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))        
+        cpMatrix = np.ones(self.shape) * cpi
+        return cpMatrix
 
+    def ucMatrix(self, *args, **kwargs):
+        ucMatrix = np.empty((len(self.__housing), len(self.__households),))
+        ucMatrix[:] = np.NaN
+        for i, housing in enumerate(self.__housings):
+            for j, household in enumerate(self.__households):
+                try: ucMatrix[i, j] = household.derivative('consumption', housing, *args, tenure=self.__tenure, **kwargs)
+                except InsufficientFundError: pass
+                except InsufficientCoverageError: pass
+                except UnsolventLifeStyleError: pass
+                except UnstableLifeStyleError: pass
+                except BelowSubsistenceError: pass
+        return ucMatrix
+
+    def zuMatrix(self, uMatrix, *args, **kwargs):
+        ikEye = np.eye((self.i))
+        ikjEye = np.broadcast_to(np.expand_dims(ikEye, axis=2), self.shape)
+        eMatrix = np.where(ikjEye == 0, -1, 1)
+        uMatrix = np.broadcast_to(np.expand_dims(uMatrix, axis=0), self.shape)
+        ssuMatrix = np.apply_along_axis(lambda x: np.sum(x)**2, 1, uMatrix)
+        ssuMatrix = np.broadcast_to(np.expand_dims(ssuMatrix, axis=0), (3,3,3))        
+        zuMatrix = eMatrix * uMatrix / ssuMatrix
+        return zuMatrix
+    
+    def dzMatrix(self, *args, **kwargs):
+        weights = np.array([household.count for household in self.__households])
+        dzMatrix = np.ones(self.shape) * weights
+        return dzMatrix
+                
+    def dpMatrix(self, *args, **kwargs):
+        uMatrix = self.uMatrix(*args, **kwargs)    
+        cpMatrix = self.cpMatrix(*args, **kwargs)
+        ucMatrix = self.ucMatrix(*args, **kwargs)
+        zuMatrix = self.zuMatrix(uMatrix, *args, **kwargs)
+        dzMatrix = self.dzMatrix(*args, **kwargs)
+        dpMatrix = dzMatrix * zuMatrix * ucMatrix * cpMatrix
+        return dpMatrix
+    
     def table(self, *args, **kwargs):
         householdcounts = np.array([household.count for household in self.__households])
         supplydemandmatrix = self.supplydemandmatrix(self, *args, **kwargs) 

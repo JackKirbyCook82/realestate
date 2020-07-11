@@ -7,6 +7,7 @@ Created on Sun Feb 23 2020
 """
 
 import pandas as pd
+import numpy as np
 from collections import namedtuple as ntuple
 
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
@@ -61,13 +62,22 @@ class Household(ntuple('Household', 'date age race language education children s
     def __init__(self, *args, count=1, **kwargs):                    
         try: self.__count = self.__count + count
         except AttributeError: self.__count = count
-
-    def __call__(self, housing, *args, tenure, **kwargs):
-        spending = self.spending(tenure, housing, *args, **kwargs) 
+     
+    def __call__(self, housing, *args, tenure, economy, date, **kwargs):
+        spending = self.spending(tenure, housing, *args, **kwargs)
         if spending <= 0: raise UnstableLifeStyleError()
-        utility = self.utility(*args, housing=housing, household=self, spending=spending, date=self.date, **kwargs)
-        delta = self.utility.derivative(['spending'], *args, housing=housing, household=self, spending=spending, date=self.date, **kwargs)        
-        return utility, delta
+        cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
+        consumption = cpi * economy.purchasingpower * spending        
+        utility = self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
+        return utility       
+     
+    def derivative(self, housing, *args, tenure, economy, date, **kwargs):
+        spending = self.spending(tenure, housing, *args, **kwargs)
+        if spending <= 0: raise UnstableLifeStyleError()
+        cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
+        consumption = cpi * economy.purchasingpower * spending        
+        utility = self.utility.derivative(*args, housing=housing, household=self, consumption=consumption, **kwargs)
+        return utility     
     
     @keydispatcher
     def spending(self, tenure, housing, *args, **kwargs): raise KeyError(tenure) 

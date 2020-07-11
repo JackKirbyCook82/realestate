@@ -51,10 +51,10 @@ class Household_UtilityFunction:
         weights = {'housing':housing_income_ratio, 'consumption':1-housing_income_ratio}
         return cls(*args, amplitude=1, diminishrate=1, subsistences=subsistences, weights=weights, functions=functions, **kwargs)  
 
-    def execute(self, *args, housing, spending, economy, date, **kwargs): 
-        factor = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
-        consumption = spending * factor * economy.purchasingpower  
+    def execute(self, *args, housing, consumption, **kwargs):
         return {'consumption':consumption}
+
+
         
 
 

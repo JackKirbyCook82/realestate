@@ -71,12 +71,12 @@ class Household(ntuple('Household', 'date age race language education children s
         utility = self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
         return utility       
      
-    def derivative(self, housing, *args, tenure, economy, date, **kwargs):
+    def derivative(self, housing, *args, tenure, filtration, economy, date, **kwargs):
         spending = self.spending(tenure, housing, *args, **kwargs)
         if spending <= 0: raise UnstableLifeStyleError()
         cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
         consumption = cpi * economy.purchasingpower * spending        
-        utility = self.utility.derivative(*args, housing=housing, household=self, consumption=consumption, **kwargs)
+        utility = self.utility.derivative(filtration, *args, housing=housing, household=self, consumption=consumption, **kwargs)
         return utility     
     
     @keydispatcher

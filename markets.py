@@ -129,10 +129,9 @@ class Personal_Property_Market(Market):
         try: self.__history = kwargs['history']
         except KeyError: pass
  
-    def __call__(self, *args, derivative=False, **kwargs): 
+    def __call__(self, *args, method='logdelta', **kwargs): 
         for step in range(self.__maxsteps):           
-            supplys, demands, prices, elasticitys = self.execute(*args, **kwargs)
-            if not derivative: elasticitys = _logdiff(demands/supplys, 0.1, 10)
+            supplys, demands, prices, elasticitys = self.execute(method, *args, **kwargs)
             try: self.__history(demands=demands, supplys=supplys, prices=prices)
             except AttributeError: pass
             meansqerr, maxsqerr = _meansqerr(demands, supplys), _maxsqerr(demands, supplys)
@@ -143,13 +142,26 @@ class Personal_Property_Market(Market):
             for newprice, housing in zip(newprices, self.__housings): 
                 housing(newprice, *args, tenure=self.__tenure, **kwargs)     
   
-    def execute(self, *args, **kwargs):
+    @keydispatcher
+    def execute(self, method, *args, **kwargs): raise KeyError(method)
+    
+    @execute.register('logdelta')
+    def execute_logdelta(self, *args, **kwargs): 
+        uMatrix = self.uMatrix(*args, **kwargs)
+        prices = self.prices(*args, **kwargs)
+        supplys = self.supplys(*args, **kwargs)
+        demands = self.demands(*args, uMatrix=uMatrix, **kwargs)
+        elasticitys = self.elasticitys(*args, demands=demands, supplys=supplys, **kwargs)
+        return supplys, demands, prices, elasticitys        
+    
+    @execute.register('derivative')
+    def execute_derivative(self, *args, **kwargs):
         uMatrix = self.uMatrix(*args, **kwargs)
         cpMatrix = self.cpMatrix(*args, **kwargs)
         ucMatrix = self.ucMatrix(*args, **kwargs)
         zuMatrix = self.zuMatrix(*args, uMatrix=uMatrix, **kwargs)
         dzMatrix = self.dzMatrix(self, *args, **kwargs)
-        dpMatrix = dzMatrix * zuMatrix * ucMatrix * cpMatrix    
+        dpMatrix = dzMatrix * zuMatrix * ucMatrix * cpMatrix  
         prices = self.prices(*args, **kwargs)
         supplys = self.supplys(*args, **kwargs)
         demands = self.demands(*args, uMatrix=uMatrix, **kwargs)
@@ -164,6 +176,15 @@ class Personal_Property_Market(Market):
         uMatrix = np.apply_along_axis(_normalize, 0, uMatrix)
         return np.apply_along_axis(_summation, 1, uMatrix * weights)  
     
+    @keydispatcher
+    def elasticitys(self, method, *args, **kwargs): raise KeyError(method)
+    
+    @elasticitys.register('logdelta')
+    def elasticitys_logdelta(self, *args, demands, supplys, **kwargs): 
+        elasticitys = _logdiff(demands/supplys, 0.1, 10)  
+        return elasticitys
+    
+    @elasticitys.register('derivative')
     def elasticitys(self, *args, **kwargs):
         dpMatrix = kwargs['dpMatrix'] if 'dpMatrix' in kwargs.keys() else  self.dpMatrix(*args, **kwargs)
         dpMatrix = np.apply_along_axis(_summation, 2, dpMatrix)
@@ -202,7 +223,7 @@ class Personal_Property_Market(Market):
 
     def zuMatrix(self, *args, **kwargs):
         uMatrix = kwargs['uMatrix'] if 'uMatrix' in kwargs.keys() else self.uMatrix(*args, **kwargs)
-        uMatrix = np.broadcast_to(np.expand_dims(uMatrix, axis=0), self.shape)
+        uMatrix = np.broadcast_to(np.expand_dims(uMatrix, axis=1), self.shape)
         ikjEye = np.broadcast_to(np.expand_dims(np.eye(len(self.i)), axis=2), self.shape)
         eMatrix = np.where(ikjEye == 0, -1, 1)
         ssuMatrix = np.apply_along_axis(lambda x: np.sum(x)**2, 1, uMatrix)

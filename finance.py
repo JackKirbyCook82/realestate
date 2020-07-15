@@ -48,12 +48,6 @@ consumption_factor = lambda cr, wr, n: np.sum(farray(cr, n) * farray(wr, n))
 loan_factor = lambda wr, n: np.sum(farray(wr, n))
 
 
-class InsufficientFundError(Exception): pass
-class InsufficientCoverageError(Exception): pass
-class UnsolventLifeStyleError(Exception): pass
-class UnstableLifeStyleError(Exception): pass
-
-
 def createFinancialsKey(*args, incomehorizon, consumptionhorizon, income, consumption, wealth, value, mortgage, studentloan, **kwargs):
     mortgage_key, studentloan_key = [loan.key for loan in (mortgage, studentloan)]    
     return (incomehorizon, consumptionhorizon, int(income), int(consumption), int(wealth), int(value), hash(mortgage_key), hash(studentloan_key),)
@@ -77,13 +71,11 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     def __new__(cls, income_horizon , consumption_horizon, *args, income, wealth, value, consumption, mortgage=None, studentloan=None, **kwargs):         
         mortgage = mortgage if mortgage else Loan('mortgage', balance=0, basis='month')
         studentloan = studentloan if studentloan else Loan('studentloan', balance=0, basis='month')
-        if consumption <= 0: raise UnstableLifeStyleError()
         return super().__new__(cls, int(income_horizon), int(consumption_horizon), income, wealth, value, consumption, mortgage, studentloan)   
 
     def __init__(self, *args, discountrate, risktolerance, **kwargs):
         self.__discountrate = discountrate
         self.__risktolerance = risktolerance
-        if self.ponzi(*args, **kwargs): raise UnsolventLifeStyleError()
 
     @property
     def key(self): return hash(createFinancialsKey(**self.todict()))
@@ -182,10 +174,7 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         downpayment = bank.downpayment(value)
         closingcost = bank.cost(value - downpayment)
         wealth = self.wealth - downpayment - closingcost
-        if wealth < 0: raise InsufficientFundError()
         mortgage = bank.loan(value - downpayment)       
-        coverage = self.income / (mortgage.payment + self.studentloan.payment)
-        if coverage < bank.coverage: raise InsufficientCoverageError()
         assets = dict(wealth=wealth, value=value)
         flows = dict(income=self.income, consumption=self.consumption)
         loans = dict(mortgage=mortgage, studentloan=self.studentloan)

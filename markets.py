@@ -8,12 +8,9 @@ Created on Mon May 18 2020
 
 import numpy as np
 import pandas as pd
-from abc import ABC, abstractmethod
 
 from utilities.strings import uppercase
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
-
-from realestate.finance import InsufficientFundError, InsufficientCoverageError, UnsolventLifeStyleError, UnstableLifeStyleError
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -32,23 +29,6 @@ _summation = lambda x: np.nansum(x)
 _logdiff = lambda x, xmin, xmax: np.log10(np.clip(x, 0.1, 10))
 _meansqerr = lambda x, y: np.round((np.square(x - y)).mean() ** 0.5, 3)
 _maxsqerr = lambda x, y: np.round(np.max(np.square(x - y)) ** 0.5, 3)
-
-
-class ConvergenceError(Exception): pass
-class HistoryLengthError(Exception): pass
-
-
-class Market(ABC):
-    @abstractmethod
-    def supplys(self, *args, **kwargs): pass
-    @abstractmethod
-    def demands(self, *args, **kwargs): pass
-    @abstractmethod
-    def prices(self, *args, **kwargs): pass
-    @abstractmethod
-    def elasticitys(self, *args, **kwargs): pass
-    @abstractmethod
-    def execute(self, *args, **kwargs): pass
 
 
 class Market_History(object):
@@ -85,7 +65,7 @@ class Market_History(object):
         except ValueError: self.__prices = np.expand_dims(prices, axis=1)     
     
     def table(self, tabletype, *args, **kwargs): 
-        if len(self) <= 1: raise HistoryLengthError()
+        if len(self) <= 1: raise ValueError()
         else: return self.__table(tabletype, *args, **kwargs) 
         
     @keydispatcher
@@ -111,7 +91,7 @@ class Market_History(object):
         return dataframe    
 
 
-class Personal_Property_Market(Market):
+class Personal_Property_Market(object):
     @property
     def i(self): return len(self.__housings)
     @property
@@ -121,49 +101,46 @@ class Personal_Property_Market(Market):
     @property
     def shape(self): return (self.j, self.i, self.k)
     
-    def __init__(self, tenure, *args, households=[], housings=[], method='derivative', stepsize=0.1, maxsteps=100, rtol=0.005, atol=0.01, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], stepsize=0.1, maxsteps=100, rtol=0.005, atol=0.01, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings, self.__tenure = households, housings, tenure
         self.__maxsteps, self.__stepsize = maxsteps, stepsize  
-        self.__method = method
         try: self.__history = kwargs['history']
         except KeyError: pass
  
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
-            supplys, demands, prices, elasticitys = self.execute(self.__method, *args, **kwargs)
+            supplys, demands, prices, elasticitys = self.execute(*args, **kwargs)
             try: self.__history(demands=demands, supplys=supplys, prices=prices)
             except AttributeError: pass
             meansqerr, maxsqerr = _meansqerr(demands, supplys), _maxsqerr(demands, supplys)
             print('Market Converging(step={}, avgerror={}, maxerror={})'.format(step, meansqerr, maxsqerr))
             if self.__converged(demands - supplys): break
-            deltaprices = prices * elasticitys * self.__stepsize       
-            newprices = prices + deltaprices
-            for newprice, housing in zip(newprices, self.__housings): 
-                housing(newprice, *args, tenure=self.__tenure, **kwargs)     
-  
-    @keydispatcher
-    def execute(self, method, *args, **kwargs): raise KeyError(method)
+
+            print(supplys)
+            print(demands)
+            print(prices)
+            print(elasticitys)
+            raise Exception()
+
+            for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs)         
     
-    @execute.register('logdelta')
-    def execute_logdelta(self, *args, **kwargs): 
-        uMatrix = self.uMatrix(*args, **kwargs)
-        prices = self.prices(*args, **kwargs)
-        supplys = self.supplys(*args, **kwargs)
-        demands = self.demands(*args, uMatrix=uMatrix, **kwargs)
-        elasticitys = self.elasticitys('logdelta', *args, demands=demands, supplys=supplys, **kwargs)
-        return supplys, demands, prices, elasticitys        
-    
-    @execute.register('derivative')
-    def execute_derivative(self, *args, **kwargs):
+    def execute(self, *args, **kwargs):
         uMatrix = self.uMatrix(*args, **kwargs)
         cpMatrix = self.cpMatrix(*args, **kwargs)
         ucMatrix = self.ucMatrix(*args, **kwargs)
         zuMatrix = self.zuMatrix(*args, uMatrix=uMatrix, **kwargs)
-        dzMatrix = self.dzMatrix(self, *args, **kwargs)
-        dpMatrix = dzMatrix * zuMatrix * ucMatrix * cpMatrix  
+        dzMatrix = self.dzMatrix(self, *args, **kwargs)        
+        dpMatrix = dzMatrix * zuMatrix * ucMatrix * cpMatrix          
+
+        print(cpMatrix)
+        print(ucMatrix)
+        print(zuMatrix)
+        print(dzMatrix)        
+        print(dpMatrix)
+        
         prices = self.prices(*args, **kwargs)
         supplys = self.supplys(*args, **kwargs)
         demands = self.demands(*args, uMatrix=uMatrix, **kwargs)
@@ -175,33 +152,22 @@ class Personal_Property_Market(Market):
 
     def demands(self, *args, uMatrix, **kwargs): 
         weights = np.array([household.count for household in self.__households])
+        uMatrix[uMatrix < 0] = np.NaN
         uMatrix = np.apply_along_axis(_normalize, 0, uMatrix)
-        return np.apply_along_axis(_summation, 1, uMatrix * weights)  
-    
-    @keydispatcher
-    def elasticitys(self, method, *args, **kwargs): raise KeyError(method)
-    
-    @elasticitys.register('logdelta')
-    def elasticitys_logdelta(self, *args, demands, supplys, **kwargs): 
-        elasticitys = _logdiff(demands/supplys, 0.1, 10)  
-        return elasticitys
-    
-    @elasticitys.register('derivative')
-    def elasticitys_derivative(self, *args, dpMatrix, **kwargs):
+        demands = np.apply_along_axis(_summation, 1, uMatrix * weights)  
+        return demands
+
+    def elasticitys(self, *args, dpMatrix, **kwargs):
         dpMatrix = np.apply_along_axis(_summation, 0, dpMatrix)
         elasticitys = np.apply_along_axis(_summation, 0, dpMatrix)
         return elasticitys
-
+    
     def uMatrix(self, *args, **kwargs):
         uMatrix = np.empty((len(self.__housings), len(self.__households),))
         uMatrix[:] = np.NaN
         for i, housing in enumerate(self.__housings):
             for j, household in enumerate(self.__households):
-                try: uMatrix[i, j] = household(housing, *args, tenure=self.__tenure, **kwargs)
-                except InsufficientFundError: pass
-                except InsufficientCoverageError: pass
-                except UnsolventLifeStyleError: pass
-                except UnstableLifeStyleError: pass
+                uMatrix[i, j] = household(housing, *args, tenure=self.__tenure, **kwargs)
         return uMatrix
     
     def cpMatrix(self, *args, economy, date, **kwargs):
@@ -215,11 +181,7 @@ class Personal_Property_Market(Market):
         ucMatrix[:] = np.NaN
         for i, housing in enumerate(self.__housings):
             for j, household in enumerate(self.__households):
-                try: ucMatrix[i, j] = household.derivative(housing, *args, tenure=self.__tenure, filtration='consumption', **kwargs)
-                except InsufficientFundError: pass
-                except InsufficientCoverageError: pass
-                except UnsolventLifeStyleError: pass
-                except UnstableLifeStyleError: pass
+                ucMatrix[i, j] = household.derivative(housing, *args, tenure=self.__tenure, filtration='consumption', **kwargs)
         ucMatrix = np.broadcast_to(np.expand_dims(ucMatrix.transpose(), axis=2), self.shape)
         assert ucMatrix.shape == self.shape
         return ucMatrix

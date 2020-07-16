@@ -53,6 +53,12 @@ def createFinancialsKey(*args, incomehorizon, consumptionhorizon, income, consum
     return (incomehorizon, consumptionhorizon, int(income), int(consumption), int(wealth), int(value), hash(mortgage_key), hash(studentloan_key),)
         
 
+class UnstableLifeStyleError(Exception): pass
+class NegativeConsumptionError(Exception): pass
+class InsufficientFundsError(Exception): pass
+class InsufficientCoverageError(Exception): pass
+
+
 class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income wealth value consumption mortgage studentloan')):
     __stringformat = 'Financials({horizon})|Assets=${assets:.0f}, Loans=${loans:.0f}, Income=${income:.0f}/MO, Consumption=${consumption:.0f}/MO'
     def __str__(self): 
@@ -76,6 +82,7 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     def __init__(self, *args, discountrate, risktolerance, **kwargs):
         self.__discountrate = discountrate
         self.__risktolerance = risktolerance
+        if self.ponzi(*args, **kwargs): raise UnstableLifeStyleError()
 
     @property
     def key(self): return hash(createFinancialsKey(**self.todict()))
@@ -174,7 +181,9 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         downpayment = bank.downpayment(value)
         closingcost = bank.cost(value - downpayment)
         wealth = self.wealth - downpayment - closingcost
-        mortgage = bank.loan(value - downpayment)       
+        if wealth < 0: raise InsufficientFundsError()
+        mortgage = bank.loan(value - downpayment)
+        if self.income / (mortgage.payment + self.studentloan.payment) < bank.coverage: raise InsufficientCoverageError()
         assets = dict(wealth=wealth, value=value)
         flows = dict(income=self.income, consumption=self.consumption)
         loans = dict(mortgage=mortgage, studentloan=self.studentloan)
@@ -184,6 +193,7 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     @classmethod
     def create(cls, *args, income, wealth=0, value=0, savingrate, **kwargs):
         consumption = income * (1 - savingrate(income))
+        if consumption <= 0: raise NegativeConsumptionError()
         return cls(*args, income=int(income), consumption=int(consumption), wealth=wealth, value=value, **kwargs)
         
     

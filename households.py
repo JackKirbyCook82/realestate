@@ -12,8 +12,9 @@ from collections import namedtuple as ntuple
 
 from utilities.dispatchers import clskey_singledispatcher as keydispatcher
 from utilities.strings import uppercase
+from utilities.utility import NumericalError
 
-from realestate.finance import Financials
+from realestate.finance import Financials, UnstableLifeStyleError, NegativeConsumptionError, InsufficientFundsError, InsufficientCoverageError
 from realestate.utility import Household_UtilityFunction
 
 __version__ = "1.0.0"
@@ -63,20 +64,17 @@ class Household(ntuple('Household', 'date age race language education children s
         try: self.__count = self.__count + count
         except AttributeError: self.__count = count
      
-    def __call__(self, housing, *args, tenure, economy, date, **kwargs):
-        spending = self.spending(tenure, housing, *args, **kwargs)
+    def __call__(self, housing, *args, tenure, economy, date, filtration, **kwargs):
+        try: spending = self.spending(tenure, housing, *args, **kwargs)
+        except (UnstableLifeStyleError, NegativeConsumptionError, InsufficientFundsError, InsufficientCoverageError): return np.NaN, np.NaN
         cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
         consumption = cpi * economy.purchasingpower * spending        
-        utility = self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
-        return utility       
+        try: 
+            utility = self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
+            derivative = self.utility.derivative(filtration, *args, housing=housing, household=self, consumption=consumption, **kwargs)
+        except NumericalError: return np.NaN, np.NaN
+        return utility, derivative       
      
-    def derivative(self, housing, *args, tenure, filtration, economy, date, **kwargs):
-        spending = self.spending(tenure, housing, *args, **kwargs)
-        cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
-        consumption = cpi * economy.purchasingpower * spending        
-        utility = self.utility.derivative(filtration, *args, housing=housing, household=self, consumption=consumption, **kwargs)
-        return utility     
-    
     @keydispatcher
     def spending(self, tenure, housing, *args, **kwargs): raise KeyError(tenure) 
     @spending.register('renter')

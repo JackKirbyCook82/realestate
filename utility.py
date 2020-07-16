@@ -28,7 +28,7 @@ utilities = CSODict()
 
 
 @utilities('housing')
-@UtilityFunction.register('housing', 'cobbdouglas', 'linear', parameters=('size', 'quality', 'location',), coefficents=('amplitude', 'diminishrate',))
+@UtilityFunction.register('housing', 'cobbdouglas', parameters=('size', 'quality', 'location',), coefficents=('amplitude', 'diminishrate',))
 class Housing_UtilityFunction: 
     @classmethod
     def create(cls, *args, poverty_sqft, poverty_yearbuilt, size_quality_ratio, size_location_ratio, **kwargs): 
@@ -43,7 +43,7 @@ class Housing_UtilityFunction:
         
 
 @utilities('household')
-@UtilityFunction.register('household', 'cobbdouglas', 'linear', parameters=('housing', 'consumption',), coefficents=('amplitude', 'diminishrate',))
+@UtilityFunction.register('household', 'cobbdouglas', parameters=('housing', 'consumption',), coefficents=('amplitude', 'diminishrate',))
 class Household_UtilityFunction:
     @classmethod
     def create(cls, *args, housing_income_ratio, poverty_consumption, **kwargs): 

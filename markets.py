@@ -101,9 +101,10 @@ class Personal_Property_Market(object):
     @property
     def shape(self): return (self.j, self.i, self.k)
     
-    def __init__(self, tenure, *args, households=[], housings=[], stepsize=0.1, maxsteps=100, rtol=0.005, atol=0.01, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], stepsize=0.1, maxsteps=500, rtol=0.005, atol=0.01, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
+        assert stepsize < 1
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings, self.__tenure = households, housings, tenure
         self.__maxsteps, self.__stepsize = maxsteps, stepsize  
@@ -112,77 +113,59 @@ class Personal_Property_Market(object):
  
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
-            supplys, demands, prices, elasticitys = self.execute(*args, **kwargs)
+            supplys, demands, prices = self.execute(*args, **kwargs)
             try: self.__history(demands=demands, supplys=supplys, prices=prices)
             except AttributeError: pass
             meansqerr, maxsqerr = _meansqerr(demands, supplys), _maxsqerr(demands, supplys)
             print('Market Converging(step={}, avgerror={}, maxerror={})'.format(step, meansqerr, maxsqerr))
             if self.__converged(demands - supplys): break
-
-            print(supplys)
-            print(demands)
-            print(prices)
-            print(elasticitys)
-            raise Exception()
-
-            for newprice, housing in zip(newprices, self.__housings): housing(newprice, *args, tenure=self.__tenure, **kwargs)         
-    
-    def execute(self, *args, **kwargs):
-        uMatrix = self.uMatrix(*args, **kwargs)
-        cpMatrix = self.cpMatrix(*args, **kwargs)
-        ucMatrix = self.ucMatrix(*args, **kwargs)
-        zuMatrix = self.zuMatrix(*args, uMatrix=uMatrix, **kwargs)
-        dzMatrix = self.dzMatrix(self, *args, **kwargs)        
-        dpMatrix = dzMatrix * zuMatrix * ucMatrix * cpMatrix          
-
-        print(cpMatrix)
-        print(ucMatrix)
-        print(zuMatrix)
-        print(dzMatrix)        
-        print(dpMatrix)
-        
+            dPP = np.log10(np.clip(demands / supplys, 0.1, 10)) * self.__stepsize
+            newprices = prices * (1 + dPP)
+            for price, housing in zip(newprices, self.__housings): housing(price, *args, tenure=self.__tenure, **kwargs)         
+ 
+    def execute(self, *args, **kwargs): 
+        uMatrix, _ = self.evaluate(*args, **kwargs)
         prices = self.prices(*args, **kwargs)
         supplys = self.supplys(*args, **kwargs)
         demands = self.demands(*args, uMatrix=uMatrix, **kwargs)
-        elasticitys = self.elasticitys('derivative', *args, dpMatrix=dpMatrix, **kwargs)
-        return supplys, demands, prices, elasticitys
+        return supplys, demands, prices
+
+    def evaluate(self, *args, **kwargs):
+        uMatrix = np.empty((len(self.__housings), len(self.__households),)) 
+        duMatrix = np.empty((len(self.__housings), len(self.__households),))
+        uMatrix[:], duMatrix[:] = np.NaN, np.NaN
+        for i, housing in enumerate(self.__housings):
+            for j, household in enumerate(self.__households):
+                uMatrix[i, j], duMatrix[i, j] = household(housing, *args, tenure=self.__tenure, filtration='consumption', **kwargs)
+        return uMatrix, duMatrix    
     
     def prices(self, *args, **kwargs): return np.array([housing.price(self.__tenure) for housing in self.__housings])
     def supplys(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])
 
     def demands(self, *args, uMatrix, **kwargs): 
         weights = np.array([household.count for household in self.__households])
-        uMatrix[uMatrix < 0] = np.NaN
         uMatrix = np.apply_along_axis(_normalize, 0, uMatrix)
         demands = np.apply_along_axis(_summation, 1, uMatrix * weights)  
         return demands
 
-    def elasticitys(self, *args, dpMatrix, **kwargs):
-        dpMatrix = np.apply_along_axis(_summation, 0, dpMatrix)
+    def elasticitys(self, *args, uMatrix, duMatrix, **kwargs):           
+        cpMatrix = self.cpMatrix(*args, **kwargs)
+        ucMatrix = self.ucMatrix(*args, duMatrix=duMatrix, **kwargs)
+        zuMatrix = self.zuMatrix(*args, uMatrix=uMatrix, **kwargs)
+        dzMatrix = self.dzMatrix(self, *args, **kwargs)        
+        dpMatrix = dzMatrix * zuMatrix * ucMatrix * cpMatrix       
         elasticitys = np.apply_along_axis(_summation, 0, dpMatrix)
+        elasticitys = np.apply_along_axis(_summation, 0, dpMatrix)          
         return elasticitys
-    
-    def uMatrix(self, *args, **kwargs):
-        uMatrix = np.empty((len(self.__housings), len(self.__households),))
-        uMatrix[:] = np.NaN
-        for i, housing in enumerate(self.__housings):
-            for j, household in enumerate(self.__households):
-                uMatrix[i, j] = household(housing, *args, tenure=self.__tenure, **kwargs)
-        return uMatrix
-    
+
     def cpMatrix(self, *args, economy, date, **kwargs):
         cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))        
         cpMatrix = np.ones(self.shape) * cpi
         assert cpMatrix.shape == self.shape
         return cpMatrix
 
-    def ucMatrix(self, *args, **kwargs):
-        ucMatrix = np.empty((len(self.__housings), len(self.__households),))
-        ucMatrix[:] = np.NaN
-        for i, housing in enumerate(self.__housings):
-            for j, household in enumerate(self.__households):
-                ucMatrix[i, j] = household.derivative(housing, *args, tenure=self.__tenure, filtration='consumption', **kwargs)
-        ucMatrix = np.broadcast_to(np.expand_dims(ucMatrix.transpose(), axis=2), self.shape)
+    def ucMatrix(self, *args, duMatrix, **kwargs):
+        ucMatrix = np.broadcast_to(np.expand_dims(duMatrix.transpose(), axis=2), self.shape)
         assert ucMatrix.shape == self.shape
         return ucMatrix
 

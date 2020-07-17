@@ -26,17 +26,41 @@ _summation = lambda x: np.nansum(x)
 _logdiff = lambda x, xmin, xmax: np.log10(np.clip(x, 0.1, 10))
 _meansqerr = lambda x, y: np.round((np.square(x - y)).mean() ** 0.5, 3)
 _maxsqerr = lambda x, y: np.round(np.max(np.square(x - y)) ** 0.5, 3)
-_movingaverage = lambda x, n: np.convolve(x, np.ones(n)/n, 'valid')
-_movingmaximum = lambda x, n: np.array([np.amax(x[i:i+n]) for i in np.arange(len(x)-n)])
-_movingminimum = lambda x, n: np.array([np.amin(x[i:i+n]) for i in np.arange(len(x)-n)])
-_movingdifference = lambda x, n: np.array([np.sum(x[i:i+n][1:]-x[i:i+n][:-1]) for i in np.arange(len(x)-n)])
+_window = lambda x, n, i: x[i:i+n]
+_void = lambda n: np.ones(n-1) * np.NaN
+_sma = lambda x, n: np.concatenate([_void(n), np.convolve(x, np.ones(n)/n, 'valid')], axis=0)
+_mmax = lambda x, n: np.concatenate([_void(n), np.array([np.amax(_window(x, n, i)) for i in np.arange(len(x)-n+1)])])
+_mmin = lambda x, n: np.concatenate([_void(n), np.array([np.amin(_window(x, n, i)) for i in np.arange(len(x)-n+1)])])
 
 
 class Market_History(object):
+    __moving = {'SMA{}':_sma, 'MAX{}':_mmax, 'MIN{}':_mmin}
+ 
+    def __len__(self): return len(self.__data) if self else 0
+    def __bool__(self): return hasattr(self, '__data')
     def __init__(self, datakey): self.__datakey = datakey
     def __call__(self, data):
         try: self.__data = np.append(self.__data, np.expand_dims(data, axis=1), axis=1)
-        except ValueError: self.__data = np.expand_dims(data, axis=1)     
+        except AttributeError: self.__data = np.expand_dims(data, axis=1)     
+
+    def sma(self, period=1): return np.apply_along_axis(_sma, 1, self.__data) if len(self) >= period else _void(len(self))
+    def mmax(self, period=1): return np.apply_along_axis(_mmax, 1, self.__data) if len(self) >= period else _void(len(self))
+    def mmin(self, period=1): return np.apply_along_axis(_mmin, 1, self.__data) if len(self) >= period else _void(len(self))
+
+    def __getitem__(self, index):
+        def wrapper(period=1):
+            assert isinstance(period, int) and period >= 1
+            columns = [self.__datakey, 'SMA{}'.format(period), 'MAX{}'.format(period), 'MIN{}'.format(period)]
+            data = np.array([self.__data[index, :], _sma(self.__data[index, :], period), _mmax(self.__data[index, :], period), _mmin(self.__data[index, :], period)])
+            dataframe = pd.DataFrame(data.transpose(), columns=columns)
+            return dataframe
+        return wrapper
+
+    def table(self, period=1):
+        assert isinstance(period, int) and period >= 1
+        dataframe = pd.DataFrame(self.__data.transpose())
+        if period > 0: dataframe = dataframe.rolling(window=period).mean().dropna(axis=1, how='all')
+        return dataframe
 
 
 class Personal_Property_Market(object):
@@ -56,11 +80,11 @@ class Personal_Property_Market(object):
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings, self.__tenure = households, housings, tenure
         self.__maxsteps, self.__stepsize = maxsteps, stepsize  
-        try: self.__prices = kwargs['prices']
+        try: self.__prices = kwargs['history']['prices']
         except KeyError: pass
-        try: self.__demands = kwargs['demands']
+        try: self.__demands = kwargs['history']['demands']
         except KeyError: pass
-        try: self.__supplys = kwargs['supplys']
+        try: self.__supplys = kwargs['history']['supplys']
         except KeyError: pass
     
     def __call__(self, *args, **kwargs): 
@@ -76,11 +100,11 @@ class Personal_Property_Market(object):
  
     def __update(self, *args, **kwargs):
         try: self.__prices(kwargs['prices'])
-        except KeyError: pass
+        except (AttributeError, KeyError): pass
         try: self.__demands(kwargs['demands'])
-        except KeyError: pass
+        except (AttributeError, KeyError): pass
         try: self.__supplys(kwargs['supplys'])
-        except KeyError: pass       
+        except (AttributeError, KeyError): pass       
     
     def execute(self, *args, **kwargs): 
         uMatrix, _ = self.evaluate(*args, **kwargs)

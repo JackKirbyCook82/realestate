@@ -9,9 +9,6 @@ Created on Mon May 18 2020
 import numpy as np
 import pandas as pd
 
-from utilities.strings import uppercase
-from utilities.dispatchers import clskey_singledispatcher as keydispatcher
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ['Personal_Property_Market', 'Market_History']
@@ -29,66 +26,17 @@ _summation = lambda x: np.nansum(x)
 _logdiff = lambda x, xmin, xmax: np.log10(np.clip(x, 0.1, 10))
 _meansqerr = lambda x, y: np.round((np.square(x - y)).mean() ** 0.5, 3)
 _maxsqerr = lambda x, y: np.round(np.max(np.square(x - y)) ** 0.5, 3)
+_movingaverage = lambda x, n: np.convolve(x, np.ones(n)/n, 'valid')
+_movingmaximum = lambda x, n: np.array([np.amax(x[i:i+n]) for i in np.arange(len(x)-n)])
+_movingminimum = lambda x, n: np.array([np.amin(x[i:i+n]) for i in np.arange(len(x)-n)])
+_movingdifference = lambda x, n: np.array([np.sum(x[i:i+n][1:]-x[i:i+n][:-1]) for i in np.arange(len(x)-n)])
 
 
 class Market_History(object):
-    def __bool__(self): return len(self) > 0
-    def __len__(self): 
-        try: return self.__prices.shape[1] 
-        except AttributeError: return 0
-    
-    @property
-    def prices(self): return self.__prices if self else None
-    @property
-    def demands(self): return self.__demands if self else None
-    @property
-    def supplys(self): return self.__supplys if self else None
-
-    @property
-    def dP(self): return self.prices[:, 1:] - self.prices[:, :-1] if len(self) > 1 else None
-    @property
-    def dQ(self): return self.demands[:, 1:] - self.demands[:, :-1] if len(self) > 1 else None
-    @property
-    def dS(self): return self.supplys[:, 1:] - self.supplys[:, :-1] if len(self) > 1 else None
-   
-    def __init__(self, *args, **kwargs): pass
-    def __call__(self, *args, **kwargs): 
-        try: supplys, demands, prices = [getattr(kwargs.pop('market'), attr) for attr in ('supplys', 'demands', 'prices',)]
-        except KeyError: supplys, demands, prices = [kwargs[key] for key in ('supplys', 'demands', 'prices',)]
-        assert all([isinstance(items, np.ndarray) for items in (supplys, demands, prices,)])
-        assert supplys.shape == demands.shape == prices.shape
-        try: self.__supplys = np.append(self.supplys, np.expand_dims(supplys, axis=1), axis=1)
-        except ValueError: self.__supplys = np.expand_dims(supplys, axis=1) 
-        try: self.__demands = np.append(self.demands, np.expand_dims(demands, axis=1), axis=1)
-        except ValueError: self.__demands = np.expand_dims(demands, axis=1)           
-        try: self.__prices = np.append(self.prices, np.expand_dims(prices, axis=1), axis=1)
-        except ValueError: self.__prices = np.expand_dims(prices, axis=1)     
-    
-    def table(self, tabletype, *args, **kwargs): 
-        if len(self) <= 1: raise ValueError()
-        else: return self.__table(tabletype, *args, **kwargs) 
-        
-    @keydispatcher
-    def __table(self, tabletype, *args, **kwargs): raise KeyError(tabletype)
-    @__table.register('price', 'prices')
-    def __tablePrice(self, *args, **kwargs): return self.__dataframe(self.prices, *args, **kwargs) 
-    @__table.register('demand', 'demands')
-    def __tableDemand(self, *args, **kwargs): return self.__dataframe(self.demands, *args, **kwargs)
-    @__table.register('supply', 'supplys')
-    def __tableSupply(self, *args, **kwargs): return self.__dataframe(self.supplys, *args, **kwargs)
-    @__table.register('elasticity', 'elasticitys')
-    def __tableElasticity(self, *args, **kwargs): return self.__dataframe(self.elasticitys, *args, **kwargs) 
-    @__table.register('housing')
-    def __tableHousing(self, *args, index, **kwargs): 
-        data = {'price':self.prices[index, 1:], 'demand':self.demands[index, 1:], 'supply':self.supplys[index, 1:], 'elasticity':self.elasticitys[index, :]}
-        return self.__dataframe(data, *args, **kwargs)
-
-    def __dataframe(self, data, *args, period=0, **kwargs):
-        assert period >= 0 and isinstance(period, int)
-        assert isinstance(data, np.ndarray)
-        dataframe = pd.DataFrame(data).transpose()
-        if period > 0: dataframe = dataframe.rolling(window=period).mean().dropna(axis=0, how='all')
-        return dataframe    
+    def __init__(self, datakey): self.__datakey = datakey
+    def __call__(self, data):
+        try: self.__data = np.append(self.__data, np.expand_dims(data, axis=1), axis=1)
+        except ValueError: self.__data = np.expand_dims(data, axis=1)     
 
 
 class Personal_Property_Market(object):
@@ -108,14 +56,17 @@ class Personal_Property_Market(object):
         self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings, self.__tenure = households, housings, tenure
         self.__maxsteps, self.__stepsize = maxsteps, stepsize  
-        try: self.__history = kwargs['history']
+        try: self.__prices = kwargs['prices']
         except KeyError: pass
- 
+        try: self.__demands = kwargs['demands']
+        except KeyError: pass
+        try: self.__supplys = kwargs['supplys']
+        except KeyError: pass
+    
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
             supplys, demands, prices = self.execute(*args, **kwargs)
-            try: self.__history(demands=demands, supplys=supplys, prices=prices)
-            except AttributeError: pass
+            self.__update(*args, supplys=supplys, demands=demands, prices=prices, **kwargs)
             meansqerr, maxsqerr = _meansqerr(demands, supplys), _maxsqerr(demands, supplys)
             print('Market Converging(step={}, avgerror={}, maxerror={})'.format(step, meansqerr, maxsqerr))
             if self.__converged(demands - supplys): break
@@ -123,6 +74,14 @@ class Personal_Property_Market(object):
             newprices = prices * (1 + dPP)
             for price, housing in zip(newprices, self.__housings): housing(price, *args, tenure=self.__tenure, **kwargs)         
  
+    def __update(self, *args, **kwargs):
+        try: self.__prices(kwargs['prices'])
+        except KeyError: pass
+        try: self.__demands(kwargs['demands'])
+        except KeyError: pass
+        try: self.__supplys(kwargs['supplys'])
+        except KeyError: pass       
+    
     def execute(self, *args, **kwargs): 
         uMatrix, _ = self.evaluate(*args, **kwargs)
         prices = self.prices(*args, **kwargs)
@@ -185,23 +144,6 @@ class Personal_Property_Market(object):
         assert dzMatrix.shape == self.shape
         return dzMatrix
                 
-    def table(self, *args, **kwargs):
-        householdcounts = np.array([household.count for household in self.__households])
-        supplydemandmatrix = self.supplydemandmatrix(self, *args, **kwargs) 
-        supplydemandmatrix[np.isnan(supplydemandmatrix)] = 0
-        dataframe = pd.DataFrame(supplydemandmatrix * householdcounts).transpose().fillna(0)
-        dataframe['T'] = dataframe.sum(axis=1)
-        dataframe.loc['T'] = dataframe.sum(axis=0)
-        dataframe.columns.name = 'Housings'
-        dataframe.index.name = 'Households'
-        dataframe.name = uppercase(self.__tenure)        
-        return dataframe        
-    
-    
-
-      
-    
-
 
        
 

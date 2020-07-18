@@ -7,11 +7,10 @@ Created on Mon May 18 2020
 """
 
 import numpy as np
-import pandas as pd
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Personal_Property_Market', 'Market_History']
+__all__ = ['Personal_Property_Market']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -24,43 +23,6 @@ _diffnormalize = lambda x: (np.nansum(x) - x) / (np.nansum(x)**2)
 _minmax = lambda x: (x - np.nanmin(x)) / (np.nanmax(x) - np.nanmin(x))
 _summation = lambda x: np.nansum(x)
 _logdiff = lambda x, xmin, xmax: np.log10(np.clip(x, 0.1, 10))
-_meansqerr = lambda x, y: np.round((np.square(x - y)).mean() ** 0.5, 3)
-_maxsqerr = lambda x, y: np.round(np.max(np.square(x - y)) ** 0.5, 3)
-_window = lambda x, n, i: x[i:i+n]
-_void = lambda n: np.ones(n-1) * np.NaN
-_sma = lambda x, n: np.concatenate([_void(n), np.convolve(x, np.ones(n)/n, 'valid')], axis=0)
-_mmax = lambda x, n: np.concatenate([_void(n), np.array([np.amax(_window(x, n, i)) for i in np.arange(len(x)-n+1)])])
-_mmin = lambda x, n: np.concatenate([_void(n), np.array([np.amin(_window(x, n, i)) for i in np.arange(len(x)-n+1)])])
-
-
-class Market_History(object):
-    __moving = {'SMA{}':_sma, 'MAX{}':_mmax, 'MIN{}':_mmin}
- 
-    def __len__(self): return len(self.__data) if self else 0
-    def __bool__(self): return hasattr(self, '__data')
-    def __init__(self, datakey): self.__datakey = datakey
-    def __call__(self, data):
-        try: self.__data = np.append(self.__data, np.expand_dims(data, axis=1), axis=1)
-        except AttributeError: self.__data = np.expand_dims(data, axis=1)     
-
-    def sma(self, period=1): return np.apply_along_axis(_sma, 1, self.__data) if len(self) >= period else _void(len(self))
-    def mmax(self, period=1): return np.apply_along_axis(_mmax, 1, self.__data) if len(self) >= period else _void(len(self))
-    def mmin(self, period=1): return np.apply_along_axis(_mmin, 1, self.__data) if len(self) >= period else _void(len(self))
-
-    def __getitem__(self, index):
-        def wrapper(period=1):
-            assert isinstance(period, int) and period >= 1
-            columns = [self.__datakey, 'SMA{}'.format(period), 'MAX{}'.format(period), 'MIN{}'.format(period)]
-            data = np.array([self.__data[index, :], _sma(self.__data[index, :], period), _mmax(self.__data[index, :], period), _mmin(self.__data[index, :], period)])
-            dataframe = pd.DataFrame(data.transpose(), columns=columns)
-            return dataframe
-        return wrapper
-
-    def table(self, period=1):
-        assert isinstance(period, int) and period >= 1
-        dataframe = pd.DataFrame(self.__data.transpose())
-        if period > 0: dataframe = dataframe.rolling(window=period).mean().dropna(axis=1, how='all')
-        return dataframe
 
 
 class Personal_Property_Market(object):
@@ -73,39 +35,27 @@ class Personal_Property_Market(object):
     @property
     def shape(self): return (self.j, self.i, self.k)
     
-    def __init__(self, tenure, *args, households=[], housings=[], stepsize=0.1, maxsteps=500, rtol=0.005, atol=0.01, **kwargs):
+    def __init__(self, tenure, *args, households=[], housings=[], stepsize=0.1, maxsteps=500, history, dampener, converger, **kwargs):
         assert isinstance(households, list) and isinstance(housings, list)
         assert tenure == 'renter' or tenure == 'owner'
         assert stepsize < 1
-        self.__converged = lambda x: np.allclose(x, np.zeros(x.shape), rtol=rtol, atol=atol) 
         self.__households, self.__housings, self.__tenure = households, housings, tenure
+        self.__history, self.__dampener, self.__converger = history, dampener, converger
         self.__maxsteps, self.__stepsize = maxsteps, stepsize  
-        try: self.__prices = kwargs['history']['prices']
-        except KeyError: pass
-        try: self.__demands = kwargs['history']['demands']
-        except KeyError: pass
-        try: self.__supplys = kwargs['history']['supplys']
-        except KeyError: pass
-    
+        
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
             supplys, demands, prices = self.execute(*args, **kwargs)
-            self.__update(*args, supplys=supplys, demands=demands, prices=prices, **kwargs)
-            meansqerr, maxsqerr = _meansqerr(demands, supplys), _maxsqerr(demands, supplys)
-            print('Market Converging(step={}, avgerror={}, maxerror={})'.format(step, meansqerr, maxsqerr))
-            if self.__converged(demands - supplys): break
-            dPP = np.log10(np.clip(demands / supplys, 0.1, 10)) * self.__stepsize
+            self.__history(prices)
+            self.__converger(demands, supplys)             
+            if self.__converger: break
+            else: avgerror, maxerror = self.__converger.avgerror, self.__converger.maxerror 
+            print('Market Converging(step={}, avgerror={:.3f}, maxerror={:.3f})'.format(step, avgerror, maxerror))            
+            dampener = np.apply_along_axis(self.__dampener, 1, self.__history.data)
+            dPP = np.log10(np.clip(demands / supplys, 0.1, 10)) * self.__stepsize * dampener  
             newprices = prices * (1 + dPP)
             for price, housing in zip(newprices, self.__housings): housing(price, *args, tenure=self.__tenure, **kwargs)         
- 
-    def __update(self, *args, **kwargs):
-        try: self.__prices(kwargs['prices'])
-        except (AttributeError, KeyError): pass
-        try: self.__demands(kwargs['demands'])
-        except (AttributeError, KeyError): pass
-        try: self.__supplys(kwargs['supplys'])
-        except (AttributeError, KeyError): pass       
-    
+
     def execute(self, *args, **kwargs): 
         uMatrix, _ = self.evaluate(*args, **kwargs)
         prices = self.prices(*args, **kwargs)
@@ -124,7 +74,6 @@ class Personal_Property_Market(object):
     
     def prices(self, *args, **kwargs): return np.array([housing.price(self.__tenure) for housing in self.__housings])
     def supplys(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])
-
     def demands(self, *args, uMatrix, **kwargs): 
         weights = np.array([household.count for household in self.__households])
         uMatrix = np.apply_along_axis(_normalize, 0, uMatrix)

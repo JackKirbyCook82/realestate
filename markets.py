@@ -25,9 +25,6 @@ _summation = lambda x: np.nansum(x)
 _logdiff = lambda x, xmin, xmax: np.log10(np.clip(x, 0.1, 10))
 
 
-class ConvergenceError(Exception): pass
-
-
 class Personal_Property_Market(object):
     @property
     def i(self): return len(self.__housings)
@@ -51,17 +48,20 @@ class Personal_Property_Market(object):
 
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
-            if self.__converger: break
-            avgerror, maxerror = self.__converger.error(how='avg'), self.__converger.error(how='max')
+            if bool(self.__converger): break
+            avgerror, maxerror = self.__converger.error('avg'), self.__converger.error('max')
             print('Market Converging(step={}, avgerror={:.3f}, maxerror={:.3f})'.format(step, avgerror, maxerror))              
             supplys, demands, prices = self.execute(*args, **kwargs)        
             steps = self.__dampener(self.__history.data) * self.__stepsize
             dPP = np.log10(np.clip(demands / supplys, 0.1, 10)) * steps
-            self.update(prices * (1 + dPP), *args, **kwargs) 
+            prices = prices * (1 + dPP)
             self.__history(prices)
+            self.__update(prices, *args, **kwargs) 
             self.__converger(supplys-demands, self.__history.data)
-        if not self.__converger: raise ConvergenceError()
-        else: self.update(self.__converger.value)     
+        self.__update(self.__converger.value)     
+        
+    def __update(self, prices, *args, **kwargs): 
+        for price, housing in zip(prices, self.__housings): housing(price, *args, tenure=self.__tenure, **kwargs)      
         
     def execute(self, *args, **kwargs): 
         uMatrix, _ = self.evaluate(*args, **kwargs)
@@ -78,9 +78,6 @@ class Personal_Property_Market(object):
             for j, household in enumerate(self.__households):
                 uMatrix[i, j], duMatrix[i, j] = household(housing, *args, tenure=self.__tenure, filtration='consumption', **kwargs)
         return uMatrix, duMatrix    
-    
-    def update(self, prices, *args, **kwargs): 
-        for price, housing in zip(prices, self.__housings): housing(price, *args, tenure=self.__tenure, **kwargs)
         
     def prices(self, *args, **kwargs): return np.array([housing.price(self.__tenure) for housing in self.__housings])
     def supplys(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])

@@ -25,6 +25,9 @@ _summation = lambda x: np.nansum(x)
 _logdiff = lambda x, xmin, xmax: np.log10(np.clip(x, 0.1, 10))
 
 
+class ConvergenceError(Exception): pass
+
+
 class Personal_Property_Market(object):
     @property
     def i(self): return len(self.__housings)
@@ -40,22 +43,26 @@ class Personal_Property_Market(object):
         assert tenure == 'renter' or tenure == 'owner'
         assert stepsize < 1
         self.__households, self.__housings, self.__tenure = households, housings, tenure
-        self.__history, self.__dampener, self.__converger = history, dampener, converger
         self.__maxsteps, self.__stepsize = maxsteps, stepsize  
-        
+        self.__history, self.__dampener, self.__converger = history, dampener, converger
+        supplys, demands, prices = self.execute(*args, **kwargs)
+        self.__history(prices)
+        self.__converger(supplys-demands, self.__history.data)
+
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
-            supplys, demands, prices = self.execute(*args, **kwargs)
-            self.__history(prices)
-            self.__converger(demands, supplys)             
             if self.__converger: break
-            else: avgerror, maxerror = self.__converger.avgerror, self.__converger.maxerror 
-            print('Market Converging(step={}, avgerror={:.3f}, maxerror={:.3f})'.format(step, avgerror, maxerror))            
-            dampener = np.apply_along_axis(self.__dampener, 1, self.__history.data)
-            dPP = np.log10(np.clip(demands / supplys, 0.1, 10)) * self.__stepsize * dampener  
-            newprices = prices * (1 + dPP)
-            for price, housing in zip(newprices, self.__housings): housing(price, *args, tenure=self.__tenure, **kwargs)         
-
+            avgerror, maxerror = self.__converger.error(how='avg'), self.__converger.error(how='max')
+            print('Market Converging(step={}, avgerror={:.3f}, maxerror={:.3f})'.format(step, avgerror, maxerror))              
+            supplys, demands, prices = self.execute(*args, **kwargs)        
+            steps = self.__dampener(self.__history.data) * self.__stepsize
+            dPP = np.log10(np.clip(demands / supplys, 0.1, 10)) * steps
+            self.update(prices * (1 + dPP), *args, **kwargs) 
+            self.__history(prices)
+            self.__converger(supplys-demands, self.__history.data)
+        if not self.__converger: raise ConvergenceError()
+        else: self.update(self.__converger.value)     
+        
     def execute(self, *args, **kwargs): 
         uMatrix, _ = self.evaluate(*args, **kwargs)
         prices = self.prices(*args, **kwargs)
@@ -72,6 +79,9 @@ class Personal_Property_Market(object):
                 uMatrix[i, j], duMatrix[i, j] = household(housing, *args, tenure=self.__tenure, filtration='consumption', **kwargs)
         return uMatrix, duMatrix    
     
+    def update(self, prices, *args, **kwargs): 
+        for price, housing in zip(prices, self.__housings): housing(price, *args, tenure=self.__tenure, **kwargs)
+        
     def prices(self, *args, **kwargs): return np.array([housing.price(self.__tenure) for housing in self.__housings])
     def supplys(self, *args, **kwargs): return np.array([housing.count for housing in self.__housings])
     def demands(self, *args, uMatrix, **kwargs): 

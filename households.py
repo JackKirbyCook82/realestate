@@ -28,35 +28,44 @@ class PrematureHouseholderError(Exception): pass
 class DeceasedHouseholderError(Exception): pass
 
 
-def createHouseholdKey(*args, date, age, race, language, education, children, size, financials, utility, **kwargs):
-    return (date.index, age, race, language, education, children, size, financials.key, utility.key,)
+def createHouseholdKey(*args, date, age, household, financials, utility, **kwargs):
+    try: date = date.index
+    except: pass
+    try: age = age.index
+    except: pass
+    try: household = [item.index for item in household.values()]
+    except: pass
+    return (date, age, *household, financials.key, utility.key,)
 
 
-class Household(ntuple('Household', 'date age race language education children size financials utility')):
+class Household(ntuple('Household', 'date age parameters financials utility')):
     __lifetimes = {'adulthood':15, 'retirement':65, 'death':95}  
+    __parameters = tuple()
 
     @classmethod
     def clear(cls): cls.__instances = {}    
     @classmethod
     def customize(cls, *args, **kwargs):
         cls.clear()
+        cls.__parameters = kwargs.get('parameters', cls.__parameters)
         cls.__lifetimes = kwargs.get('lifetimes', cls.__lifetimes)   
 
     def __repr__(self): 
-        content = {'utility':repr(self.utility), 'financials':repr(self.financials)}
-        content.update({field:repr(getattr(self, field)) for field in self._fields if field not in content.keys()})
+        content = {'date':repr(self.date), 'age':repr(self.age), 'utility':repr(self.utility), 'financials':repr(self.financials)}
+        content.update({key:repr(value) for key, value in self.parameters.items()})
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))
 
     __instances = {}       
     @property
     def count(self): return self.__count    
-    def __new__(cls, *args, **kwargs):
-        if kwargs['age'] < cls.__lifetimes['adulthood']: raise PrematureHouseholderError()
-        if kwargs['age'] > cls.__lifetimes['death']: raise DeceasedHouseholderError()              
-        key = hash(createHouseholdKey(*args, **kwargs))
+    def __new__(cls, *args, date, age, household, financials, utility, **kwargs):
+        if age < cls.__lifetimes['adulthood']: raise PrematureHouseholderError()
+        if age > cls.__lifetimes['death']: raise DeceasedHouseholderError()              
+        key = hash(createHouseholdKey(*args, date=date, age=age, household=household, financials=financials, utility=utility, **kwargs))
         try: return cls.__instances[key]
         except KeyError: 
-            newinstance = super().__new__(cls, **{field:kwargs[field] for field in cls._fields})
+            parameters = {parameter:household[parameter] for parameter in cls.__parameters}
+            newinstance = super().__new__(cls, date=date, age=age, parameters=parameters, financials=financials, utility=utility)
             cls.__instances[key] = newinstance
             return newinstance
     
@@ -98,12 +107,12 @@ class Household(ntuple('Household', 'date age race language education children s
     
     def todict(self): return self._asdict()
     def __getitem__(self, item): 
-        if isinstance(item, (int, slice)): return super().__getitem__(item)
-        elif isinstance(item, str): return getattr(self, item)
-        else: raise TypeError(type(item))
+        assert isinstance(item, str)
+        try: return getattr(self, item)
+        except AttributeError: return self.parameters[item]
 
     def toSeries(self):
-        content = {'count':self.count, 'age':self.age, 'race':self.race, 'education':self.education}
+        content = {'count':self.count, 'age':self.age, **{key:value for key, value in self.parameters.items()}}
         content.update({'income':self.financials.income, 'consumption':self.financials.consumption, 'netwealth':self.financials.netwealth})
         series = pd.Series(content)
         return series
@@ -116,14 +125,13 @@ class Household(ntuple('Household', 'date age race language education children s
         return dataframe
 
     @classmethod
-    def create(cls, *args, date, household={}, financials={}, economy, **kwargs):
+    def create(cls, *args, date, age, household={}, financials={}, economy, **kwargs):
         assert isinstance(household, dict) and isinstance(financials, dict)
-        rates = dict(wealthrate=economy.wealthrate(date.year, units='month'), incomerate=economy.incomerate(date.year, units='month'))
-        income_horizon = max((cls.__lifetimes['retirement'] - household['age']) * 12, 0)
-        consumption_horizon = max((cls.__lifetimes['death'] - household['age']) * 12, 0)   
-        financials = Financials.create(income_horizon, consumption_horizon, **financials, **rates)
+        income_horizon = max((cls.__lifetimes['retirement'] - age) * 12, 0)
+        consumption_horizon = max((cls.__lifetimes['death'] - age) * 12, 0)   
+        financials = Financials.create(income_horizon, consumption_horizon, date=date, age=age, economy=economy, **financials)
         utility = Household_UtilityFunction.create(**household)
-        return cls(*args, date=date, **household, financials=financials, utility=utility, **kwargs)   
+        return cls(*args, date=date, age=age, household=household, financials=financials, utility=utility, **kwargs)   
 
 
     

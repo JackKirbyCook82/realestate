@@ -84,17 +84,16 @@ class Housing(ntuple('Housing', 'geography date parameters concepts')):
     def updatepricee_owner(self, price, *args, **kwargs): self.__price = price  
     
     def todict(self): return self._asdict()
-    def __getattr__(self, attr): return self.concepts[attr]
     def __getitem__(self, item): 
-        assert isinstance(item, str)
-        try: return getattr(self, item)
-        except AttributeError: 
-            try: return self.parameters[item]
-            except KeyError: 
-                for key, value in self.concepts.items():
-                    try: return getattr(value, item)
-                    except AttributeError: pass
-                raise KeyError(item)                
+        if not isinstance(item, str): return super().__getitem__(item)
+        else: return getattr(self, item)    
+    def __getattr__(self, attr): 
+        try: return self.parameters[attr]
+        except KeyError: 
+            for key, value in self.concepts.items():
+                try: return getattr(value, attr)
+                except AttributeError: pass
+            raise AttributeError(attr)                
     
     @property
     def key(self): return hash(createHousingKey(**self.todict()))   
@@ -142,9 +141,9 @@ class Housing(ntuple('Housing', 'geography date parameters concepts')):
     @classmethod
     def create(cls, *args, date, geography, housing={}, prices, **kwargs):         
         assert isinstance(housing, dict) and isinstance(prices, dict)
-        parameters = {housing[item] for item in cls.__parameters}
+        parameters = {item:housing.pop(item) for item in cls.__parameters}
         concepts = {key:value(housing, *args, **kwargs) for key, value in cls.__concepts.items()}
-        return cls(*args, date=date, geography=geography, parameters=parameters, concepts=concepts, **prices, **kwargs)  
+        return cls(*args, date=date, geography=geography, parameters=parameters, concepts=concepts, **housing, **prices, **kwargs)  
         
 
     

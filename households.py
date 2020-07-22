@@ -107,9 +107,11 @@ class Household(ntuple('Household', 'date age parameters financials utility')):
     
     def todict(self): return self._asdict()
     def __getitem__(self, item): 
-        assert isinstance(item, str)
-        try: return getattr(self, item)
-        except AttributeError: return self.parameters[item]
+        if not isinstance(item, str): return super().__getitem__(item)
+        else: return getattr(self, item)
+    def __getattr__(self, attr):
+        try: return self.parameters[attr]
+        except KeyError: raise AttributeError(attr)
 
     def toSeries(self):
         content = {'count':self.count, 'age':self.age, **{key:value for key, value in self.parameters.items()}}

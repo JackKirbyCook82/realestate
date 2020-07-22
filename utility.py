@@ -27,6 +27,9 @@ _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 utilities = CSODict()
 
 
+# ADJUST LOCATION, QUALITY, SIZE WITH AREA SPECIFIC VALUES
+# ADJUST HOUSING UTILITY WITH AVERAGE AS PER MIT
+
 @utilities('housing')
 @UtilityFunction.register('housing', 'cobbdouglas', parameters=('location', 'quality', 'size',), coefficents=('amplitude', 'diminishrate',))
 class Housing_UtilityFunction: 
@@ -37,9 +40,11 @@ class Housing_UtilityFunction:
         return cls(*args, weights=weights, subsistences={}, **coefficents, **kwargs)    
     
     def execute(self, *args, housing, **kwargs):
-        return {'size':housing.size, 'location':housing.location, 'quality':housing.quality}
+        return {'location':housing.location, 'quality':housing.quality, 'size':housing.size}
         
-
+    
+# ADJUST CONSUMPTION UTILITY WITH POVERTY AND LIVING AS PER MIT 
+        
 @utilities('household')
 @UtilityFunction.register('household', 'cobbdouglas', parameters=('housing', 'consumption',), coefficents=('amplitude', 'diminishrate',))
 class Household_UtilityFunction:

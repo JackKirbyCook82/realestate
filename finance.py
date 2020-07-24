@@ -197,10 +197,10 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
         return self.__class__(self.incomehorizon, self.consumptionhorizon, **assets, **flows, **loans, **rates)
 
     @classmethod
-    def create(cls, *args, date, income, wealth=0, value=0, savingrate, economy, **kwargs):
+    def create(cls, *args, date, income, wealth=0, value=0, economy, **kwargs):
         wealthrate = economy.wealthrate(date.year, units='month') 
         incomerate = economy.incomerate(date.year, units='month')
-        consumption = income * (1 - savingrate(income))
+        consumption = income
         if consumption <= 0: raise NegativeConsumptionError()
         return cls(*args, income=int(income), consumption=int(consumption), wealth=wealth, value=value, wealthrate=wealthrate, incomerate=incomerate, **kwargs)
         

@@ -21,10 +21,10 @@ __license__ = ""
 
 
 def createHousingKey(*args, date, geography, parameters={}, concepts={}, **kwargs):
-    try: parameters = [item.index for item in parameters.values()]
-    except: pass
+    try: parameters = [hash((key, value.index,)) for key, value in parameters.items()]
+    except: parameters = [hash((key, value,)) for key, value in parameters.items()]
     concepts = [value for conceptkey, conceptvalue in concepts.items() for field, value in conceptvalue.todict().items()]
-    return (geography.index, date.index, *parameters, *concepts)        
+    return (geography.geoID, date.index, *parameters, *concepts)        
 
 
 Crime = concept('crime', ['incomelevel', 'race', 'education', 'unit'])
@@ -96,7 +96,7 @@ class Housing(ntuple('Housing', 'geography date parameters concepts')):
             raise AttributeError(attr)                
     
     @property
-    def key(self): return hash(createHousingKey(**self.todict()))   
+    def key(self): return createHousingKey(**self.todict())  
     def __ne__(self, other): return not self.__eq__(other)
     def __eq__(self, other): 
         assert isinstance(other, type(self))

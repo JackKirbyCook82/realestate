@@ -28,14 +28,12 @@ class PrematureHouseholderError(Exception): pass
 class DeceasedHouseholderError(Exception): pass
 
 
-def createHouseholdKey(*args, date, age, household, financials, utility, **kwargs):
-    try: date = date.index
-    except: pass
+def createHouseholdKey(*args, date, age, parameters, financials, utility, **kwargs):
     try: age = age.index
     except: pass
-    try: household = [item.index for item in household.values()]
-    except: pass
-    return (date, age, *household, financials.key, utility.key,)
+    try: parameters = [hash((key, value.index,)) for key, value in parameters.items()]
+    except: parameters = [hash((key, value,)) for key, value in parameters.items()]
+    return (date.index, age, *parameters, financials.key, utility.key,)
 
 
 class Household(ntuple('Household', 'date age parameters financials utility')):
@@ -58,13 +56,13 @@ class Household(ntuple('Household', 'date age parameters financials utility')):
     __instances = {}       
     @property
     def count(self): return self.__count    
-    def __new__(cls, *args, date, age, household, financials, utility, **kwargs):
+    def __new__(cls, *args, date, age, parameters, financials, utility, **kwargs):
         if age < cls.__lifetimes['adulthood']: raise PrematureHouseholderError()
         if age > cls.__lifetimes['death']: raise DeceasedHouseholderError()              
-        key = hash(createHouseholdKey(*args, date=date, age=age, household=household, financials=financials, utility=utility, **kwargs))
+        key = hash(createHouseholdKey(*args, date=date, age=age, parameters=parameters, financials=financials, utility=utility, **kwargs))
         try: return cls.__instances[key]
         except KeyError: 
-            parameters = {parameter:household[parameter] for parameter in cls.__parameters}
+            parameters = {parameter:parameters[parameter] for parameter in cls.__parameters}
             newinstance = super().__new__(cls, date=date, age=age, parameters=parameters, financials=financials, utility=utility)
             cls.__instances[key] = newinstance
             return newinstance
@@ -99,7 +97,7 @@ class Household(ntuple('Household', 'date age parameters financials utility')):
         return newfinancials.consumption - housingcost
     
     @property
-    def key(self): return hash(createHouseholdKey(**self.todict()))   
+    def key(self): return createHouseholdKey(**self.todict())   
     def __ne__(self, other): return not self.__eq__(other)
     def __eq__(self, other): 
         assert isinstance(other, type(self))
@@ -131,9 +129,10 @@ class Household(ntuple('Household', 'date age parameters financials utility')):
         assert isinstance(household, dict) and isinstance(financials, dict)
         income_horizon = max((cls.__lifetimes['retirement'] - age) * 12, 0)
         consumption_horizon = max((cls.__lifetimes['death'] - age) * 12, 0)   
+        parameters = {item:household.pop(item) for item in cls.__parameters}
         financials = Financials.create(income_horizon, consumption_horizon, date=date, age=age, economy=economy, **financials)
         utility = Household_UtilityFunction.create(**household)
-        return cls(*args, date=date, age=age, household=household, financials=financials, utility=utility, **kwargs)   
+        return cls(*args, date=date, age=age, parameters=parameters, financials=financials, utility=utility, **household, **kwargs)   
 
 
     

@@ -13,7 +13,7 @@ from utilities.utility import UtilityIndex, UtilityFunction
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ['Household_UtilityFunction']
+__all__ = ['Housing_UtilityFunction', 'Household_UtilityFunction']
 __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
@@ -24,10 +24,11 @@ _filterempty = lambda items: [item for item in _aslist(items) if item]
 _inverse = lambda items: np.array(items).astype('float64')**-1
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 
-utilities = CSODict()
+
+# cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
+# consumption = (spending / cpi)
 
 
-@utilities('housing')
 @UtilityFunction.register('housing', 'ces', parameters=('location', 'quality', 'space',), coefficents=('amplitude', 'diminishrate', 'elasticity',))
 class Housing_UtilityFunction: 
     @classmethod
@@ -40,7 +41,6 @@ class Housing_UtilityFunction:
         return {'location':housing.location, 'quality':housing.quality, 'space':housing.space}
         
     
-@utilities('household')
 @UtilityFunction.register('household', 'cobbdouglas', parameters=('housing', 'consumption',), coefficents=('amplitude', 'diminishrate',))
 class Household_UtilityFunction:
     @classmethod

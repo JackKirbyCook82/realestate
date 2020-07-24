@@ -29,11 +29,8 @@ class DeceasedHouseholderError(Exception): pass
 
 
 def createHouseholdKey(*args, date, age, parameters, financials, utility, **kwargs):
-    try: age = age.index
-    except: pass
-    try: parameters = [hash((key, value.index,)) for key, value in parameters.items()]
-    except: parameters = [hash((key, value,)) for key, value in parameters.items()]
-    return (date.index, age, *parameters, financials.key, utility.key,)
+    parameters = [hash((key, hash(value),)) for key, value in parameters.items()]
+    return (hash(date), hash(age), *parameters, hash(financials.key), hash(utility.key),)
 
 
 class Household(ntuple('Household', 'date age parameters financials utility')):
@@ -71,14 +68,12 @@ class Household(ntuple('Household', 'date age parameters financials utility')):
         try: self.__count = self.__count + count
         except AttributeError: self.__count = count
      
-    def __call__(self, housing, *args, tenure, economy, date, filtration, **kwargs):
+    def __call__(self, housing, *args, tenure, filtration, **kwargs):
         try: spending = self.spending(tenure, housing, *args, **kwargs)
         except (UnstableLifeStyleError, NegativeConsumptionError, InsufficientFundsError, InsufficientCoverageError): return np.NaN, np.NaN
-        cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
-        consumption = cpi * economy.purchasingpower * spending        
         try: 
-            utility = self.utility(*args, housing=housing, household=self, consumption=consumption, **kwargs)
-            derivative = self.utility.derivative(filtration, *args, housing=housing, household=self, consumption=consumption, **kwargs)
+            utility = self.utility(*args, housing=housing, household=self, spending=spending, **kwargs)
+            derivative = self.utility.derivative(filtration, *args, housing=housing, household=self, spending=spending, **kwargs)
         except NumericalError: return np.NaN, np.NaN
         return utility, derivative       
      

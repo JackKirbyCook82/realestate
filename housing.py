@@ -20,11 +20,10 @@ __copyright__ = "Copyright 2020, Jack Kirby Cook"
 __license__ = ""
 
 
-def createHousingKey(*args, date, geography, parameters={}, concepts={}, **kwargs):
-    try: parameters = [hash((key, value.index,)) for key, value in parameters.items()]
-    except: parameters = [hash((key, value,)) for key, value in parameters.items()]
-    concepts = [value for conceptkey, conceptvalue in concepts.items() for field, value in conceptvalue.todict().items()]
-    return (geography.geoID, date.index, *parameters, *concepts)        
+def createHousingKey(*args, geography, date, parameters={}, concepts={}, **kwargs):
+    parameters = [hash((key, hash(value),)) for key, value in parameters.items()]    
+    concepts = [hash((key, hash(value),)) for key, value in concepts.items()]
+    return (hash(geography), hash(date), *parameters, *concepts,)
 
 
 Crime = concept('crime', ['incomelevel', 'race', 'education', 'unit'])

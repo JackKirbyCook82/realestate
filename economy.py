@@ -46,7 +46,7 @@ def createcurve_average(x, y, *args, method, **kwargs): return _curve(x, y, meth
 def createcurve_last(x, y, *args, method, **kwargs): return _curve(x, y, method, (y[np.argmin(x)], y[np.argmax(x)]))   
 
 
-class Economy(ntuple('Economy', 'date wealthrate incomerate inflationrate')):
+class Economy(ntuple('Economy', 'date wealthrate incomerate inflationrate depreciationrate purchasepower housingpower')):
     def __repr__(self):    
         content = {field:repr(getattr(self, field)) for field in self._fields}
         return '{}({})'.format(self.__class__.__name__, ', '.join(['='.join([key, value]) for key, value in content.items()]))

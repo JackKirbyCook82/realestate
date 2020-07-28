@@ -28,9 +28,11 @@ _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 @UtilityFunction.register('habitation', 'ces', parameters=('location', 'quality', 'space',), coefficents=('amplitude', 'diminishrate', 'elasticity',))
 class Habitation_UtilityFunction: 
     @classmethod
-    def create(cls, *args, **kwargs): 
-        weights = {'location':1, 'quality':1, 'space':1}
-        coefficents = {'amplitude':1, 'diminishrate':1, 'elasticity':0.5}
+    def create(cls, *args, elasticity_substitution, housing_index_ratios={}, **kwargs):
+        assert isinstance(housing_index_ratios, dict)
+        substitution_parameter = 1 - (1 / elasticity_substitution)
+        weights = {'location':housing_index_ratios['location'], 'quality':housing_index_ratios['quality'], 'space':housing_index_ratios['space']}
+        coefficents = {'amplitude':1, 'diminishrate':1, 'elasticity':substitution_parameter}
         return cls(*args, weights=weights, subsistences={}, **coefficents, **kwargs)    
     
     def execute(self, *args, housing, **kwargs):
@@ -40,9 +42,9 @@ class Habitation_UtilityFunction:
 @UtilityFunction.register('household', 'cobbdouglas', parameters=('habitation', 'consumption',), coefficents=('amplitude', 'diminishrate',))
 class Household_UtilityFunction:
     @classmethod
-    def create(cls, *args, **kwargs): 
+    def create(cls, *args, housing_expense_ratio, **kwargs): 
         functions = {'habitabtion':Habitation_UtilityFunction.create(*args, **kwargs)}
-        weights = {'habitation':0.3, 'consumption':1 - 0.3}
+        weights = {'habitation':housing_expense_ratio, 'consumption':1 - housing_expense_ratio}
         coefficents = {'amplitude':1, 'diminishrate':1}
         return cls(*args, subsistences={}, weights=weights, functions=functions, **coefficents, **kwargs)  
 

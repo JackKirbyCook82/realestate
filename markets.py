@@ -49,7 +49,7 @@ class Personal_Property_Market(object):
     def __call__(self, *args, **kwargs): 
         for step in range(self.__maxsteps):           
             if bool(self.__converger): break
-            print('Market Converging[{}]'.format(step))              
+            print('Market Converging: {}'.format(step))              
             supplys, demands, prices = self.execute(*args, **kwargs)      
             steps = self.__dampener(self.__history.data) * self.__stepsize
             dPP = np.log10(np.clip(demands / supplys, 0.1, 10)) * steps

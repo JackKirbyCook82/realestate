@@ -25,8 +25,7 @@ _inverse = lambda items: np.array(items).astype('float64')**-1
 _normalize = lambda items: np.array(items) / np.sum(np.array(items))
 
 
-@UtilityFunction.register('habitation', 'ces', parameters=('location', 'quality', 'space',), coefficents=('amplitude', 'diminishrate', 'elasticity',))
-class Habitation_UtilityFunction: 
+class Habitation_UtilityFunction(UtilityFunction, 'habitation', 'ces', parameters=('location', 'quality', 'space',), coefficents=('amplitude', 'diminishrate', 'elasticity',)): 
     @classmethod
     def create(cls, *args, elasticity_substitution, housing_index_ratios={}, **kwargs):
         assert isinstance(housing_index_ratios, dict)
@@ -38,16 +37,15 @@ class Habitation_UtilityFunction:
     def execute(self, *args, housing, **kwargs):
         return {'location':housing.location, 'quality':housing.quality, 'space':housing.space}
         
-    
-@UtilityFunction.register('household', 'cobbdouglas', parameters=('habitation', 'consumption',), coefficents=('amplitude', 'diminishrate',))
-class Household_UtilityFunction:
+
+class Household_UtilityFunction(UtilityFunction, 'household', 'cobbdouglas', parameters=('habitation', 'consumption',), coefficents=('amplitude', 'diminishrate',)):
     @classmethod
     def create(cls, *args, housing_expense_ratio, **kwargs): 
         functions = {'habitabtion':Habitation_UtilityFunction.create(*args, **kwargs)}
         weights = {'habitation':housing_expense_ratio, 'consumption':1 - housing_expense_ratio}
         coefficents = {'amplitude':1, 'diminishrate':1}
         return cls(*args, subsistences={}, weights=weights, functions=functions, **coefficents, **kwargs)  
-
+    
     def execute(self, *args, spending, habitation, economy, date, **kwargs):
         cpi = np.prod(np.array([1+economy.inflationrate(i, units='year') for i in range(economy.date.year, date.year)]))
         consumption = (spending / cpi)

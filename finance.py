@@ -108,7 +108,7 @@ class Financials(ntuple('Financials', 'incomehorizon consumptionhorizon income w
     def __getitem__(self, item): 
         if isinstance(item, (int, slice)): return super().__getitem__(item)
         elif isinstance(item, str): return getattr(self, item)
-        else: raise TypeError(type(item))
+        else: raise TypeError(type(item).__name__)
 
     def table(self, *args, wealthrate, incomerate, **kwargs):       
         mortgage = loanarray(self.mortgage.balance, self.mortgage.rate, self.mortgage.duration) if self.mortgage else np.array([])

@@ -132,7 +132,7 @@ class Environment(object):
     @typedispatcher
     def __getrate(self, table, date, *args, extrapolate, basis, weights=None, **kwargs): 
         try: table = table.tocurve(*args, how='average', **kwargs)           
-        except AttributeError: raise TypeError(type(table))
+        except AttributeError: raise TypeError(type(table).__name__)
         return Rate(table.xvalues, table.yvalues, w=weights, extrapolate=extrapolate, basis=basis)
     
     @__getrate.register(int, float, Number)
